@@ -2,6 +2,7 @@
 
 import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { MISSING_API_KEY_MESSAGE, RangerEvaluator, resolveApiKey } from "./evaluator.js";
@@ -37,6 +38,7 @@ Ask typed questions of a codebase. Units in, probabilities out.
   --dry-run              enumerate units and count questions, zero live requests
   --no-cache             skip the response cache (on by default)
   --cache-dir <path>     cache directory (default: $XDG_CACHE_HOME/rangerjev)
+  --version              print the version
   --help                 show this help
 
 Stdout carries only the report JSON (or text with --format text). All chatter
@@ -47,6 +49,7 @@ input, a provider failure, or unanswered questions.
 interface Options {
   paths: string[];
   showHelp: boolean;
+  showVersion: boolean;
   noCache: boolean;
   cacheDir?: string;
   by: SplitterKind;
@@ -80,6 +83,7 @@ function parseArgs(args: string[]): Options {
   const options: Options = {
     paths: [],
     showHelp: false,
+    showVersion: false,
     noCache: false,
     by: "file",
     depth: 3,
@@ -98,6 +102,8 @@ function parseArgs(args: string[]): Options {
     };
     if (arg === "--help") {
       options.showHelp = true;
+    } else if (arg === "--version") {
+      options.showVersion = true;
     } else if (arg === "--by") {
       const value = next();
       if (value !== "file" && value !== "function" && value !== "call-tree") {
@@ -192,6 +198,12 @@ export async function runCli(
     return fail(stderr, error instanceof Error ? error.message : String(error));
   }
   const cwd = dependencies.cwd ?? process.cwd();
+  if (options.showVersion) {
+    const require = createRequire(import.meta.url);
+    const pkg = require("../package.json") as { version?: unknown };
+    stdout(`rangerjev ${typeof pkg.version === "string" ? pkg.version : "unknown"}\n`);
+    return 0;
+  }
   if (options.showHelp) {
     stdout(HELP);
     return 0;
