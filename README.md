@@ -23,7 +23,8 @@ rangerjev src/ --by function \
 # richer criteria live in a file (commas, contrasts, examples)
 rangerjev src/ --by file --questions q.json
 
-# follow imports from an entry point, 3 deep
+# follow imports from an entry point, 3 deep (relative imports only;
+# bare and aliased package imports are not traversed)
 rangerjev --by call-tree --entry src/index.ts --depth 3 --questions q.json
 
 # custom splitter: one file, default export
