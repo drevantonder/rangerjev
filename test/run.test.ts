@@ -41,6 +41,26 @@ describe("ask", () => {
     expect(report.usage.totalTokens).toBeGreaterThan(0);
   });
 
+  it("counts yes only at or above the probability midpoint", async () => {
+    const qs = questions();
+    const report = await ask({
+      units,
+      questions: qs,
+      evaluator: {
+        ask: async (_state, payload) => ({
+          answers: Object.fromEntries(
+            Object.keys(payload).map((key, index) => [
+              key,
+              { type: "noul", noul: index === 0 ? 0.8 : 0.3 },
+            ]),
+          ),
+          usage: { inputTokens: 1, outputTokens: 0, totalTokens: 1 },
+        }),
+      },
+    });
+    expect(report.summary["leak"]).toMatchObject({ type: "boolean", n: 2, yes: 1 });
+  });
+
   it("records unanswered when the evaluator omits answers", async () => {
     const qs = questions();
     const report = await ask({

@@ -237,6 +237,7 @@ function summarize(
         if (answer?.type === "boolean") {
           n += 1;
           sum += answer.probability;
+          // probability midpoint: at least as likely yes as no counts as yes
           if (answer.probability >= 0.5) yes += 1;
         }
       });
