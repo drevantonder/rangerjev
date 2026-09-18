@@ -70,7 +70,7 @@ function plannedQuestions(units: Unit[], questions: NamedQuestion[]): PlannedQue
   return planned;
 }
 
-function questionPayload(unitIndex: number, question: NamedQuestion): Question {
+function questionPayload({ unitIndex, question }: PlannedQuestion): Question {
   const instructions: EntryType = {
     question: question.question.instructions ?? null,
     inspect: `units[${unitIndex}].source`,
@@ -84,7 +84,7 @@ function chunkItems(baseChars: number, items: PlannedQuestion[]): PlannedQuestio
   let currentChars = baseChars;
   for (const item of items) {
     const entryChars = JSON.stringify({
-      [item.key]: questionPayload(item.unitIndex, item.question),
+      [item.key]: questionPayload(item),
     }).length;
     if (
       current.length > 0 &&
@@ -174,7 +174,7 @@ async function evaluateBatch(
 ): Promise<BatchOutcome> {
   const payload: Questions = {};
   for (const item of batch) {
-    payload[item.key] = questionPayload(item.unitIndex, item.question);
+    payload[item.key] = questionPayload(item);
   }
   let result;
   try {
