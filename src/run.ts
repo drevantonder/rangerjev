@@ -337,7 +337,7 @@ export async function ask(input: AskInput): Promise<Report> {
       : undefined;
   const model = input.model ?? DEFAULT_MODEL;
 
-  let cacheHits = 0;
+  let cacheHitCount = 0;
   let pending = plannedQuestions(units, questions);
   if (cacheDir !== undefined) {
     const misses: PlannedQuestion[] = [];
@@ -351,7 +351,7 @@ export async function ask(input: AskInput): Promise<Report> {
         misses.push(item);
         continue;
       }
-      cacheHits += 1;
+      cacheHitCount += 1;
       let byUnit = results.get(item.resultIndex);
       if (!byUnit) {
         byUnit = new Map();
@@ -426,7 +426,7 @@ export async function ask(input: AskInput): Promise<Report> {
     units: unitResults,
     summary: summarize(units, results, questions),
     usage,
-    cache: { enabled: cacheDir !== undefined, hits: cacheHits, misses: questionsAsked },
+    cache: { enabled: cacheDir !== undefined, hits: cacheHitCount, misses: questionsAsked },
     escalations,
     coverage: {
       unitsEnumerated: units.length,
