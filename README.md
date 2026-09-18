@@ -1,6 +1,6 @@
 # rangerjev
 
-Ask typed questions of a codebase. Units in, probabilities out.
+Ask typed questions of a codebase.
 
 `rangerjev` splits code into units (files, functions, or a call-tree slice),
 asks one Jev judgment per unit, and aggregates the answers in code. It never

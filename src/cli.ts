@@ -22,7 +22,7 @@ import type { NamedQuestion, Report, SplitterKind, Unit } from "./types.js";
 
 const HELP = `Usage: rangerjev [PATH]... [options]
 
-Ask typed questions of a codebase. Units in, probabilities out.
+Ask typed questions of a codebase.
 
   --by <kind>            file | function | call-tree (default: file)
   --entry <path>         call-tree root (required with --by call-tree)

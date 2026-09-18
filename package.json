@@ -1,7 +1,7 @@
 {
   "name": "rangerjev",
   "version": "0.1.0",
-  "description": "Ask typed questions of a codebase. Units in, probabilities out.",
+  "description": "Ask typed questions of a codebase.",
   "license": "MIT",
   "repository": {
     "type": "git",
