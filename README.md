@@ -117,8 +117,6 @@ input, a provider failure, or at least one unanswered question.
 }
 ```
 
-`--format text` is gone: stdout is always JSON. Point it at a file.
-
 ## Custom splitters
 
 `--unit-finder` loads a module with `jiti`. It must default-export either a
