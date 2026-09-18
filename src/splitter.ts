@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, lstat } from "node:fs/promises";
 import { extname, join, posix, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseSync, Visitor } from "oxc-parser";
@@ -74,15 +74,30 @@ async function walk(
   extensions: Set<string>,
   out: string[],
 ): Promise<void> {
-  const info = await stat(absolute);
+  // lstat: never follow symlinks (avoids cycles and dangling targets), and
+  // skip entries that vanish mid-walk (sockets, lock files, removed files).
+  let info;
+  try {
+    info = await lstat(absolute);
+  } catch {
+    return;
+  }
   if (info.isDirectory()) {
     if (SKIPPED_DIRS.has(absolute.split(sep).pop() ?? "")) return;
-    for (const entry of await readdir(absolute)) {
+    let entries: string[];
+    try {
+      entries = await readdir(absolute);
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
       await walk(join(absolute, entry), cwd, extensions, out);
     }
     return;
   }
-  if (extensions.has(extname(absolute).toLowerCase())) out.push(toPosix(cwd, absolute));
+  if (info.isFile() && extensions.has(extname(absolute).toLowerCase())) {
+    out.push(toPosix(cwd, absolute));
+  }
 }
 
 export async function collectFiles(
@@ -98,12 +113,13 @@ export async function collectFiles(
   const found = new Set<string>();
   for (const pattern of roots) {
     const absolute = resolve(cwd, pattern);
-    const bucket: string[] = [];
     try {
-      await walk(absolute, cwd, extensions, bucket);
+      await lstat(absolute);
     } catch {
       throw new Error(`no such file or directory: ${pattern}`);
     }
+    const bucket: string[] = [];
+    await walk(absolute, cwd, extensions, bucket);
     for (const path of bucket) found.add(path);
   }
   const sorted = [...found].sort();

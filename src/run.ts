@@ -18,7 +18,10 @@ const LOWEST_LIMIT = 5;
 
 interface PlannedQuestion {
   key: string;
+  /** Index into the current request state (remapped per shard). */
   unitIndex: number;
+  /** Stable global unit index for results and cache keys. */
+  resultIndex: number;
   questionId: string;
   question: NamedQuestion;
 }
@@ -55,6 +58,7 @@ export function plannedQuestions(units: Unit[], questions: NamedQuestion[]): Pla
       planned.push({
         key: `${question.id}__${unitIndex}`,
         unitIndex,
+        resultIndex: unitIndex,
         questionId: question.id,
         question,
       });
@@ -167,7 +171,7 @@ async function evaluateBatch(
     }
     for (const item of batch) {
       unanswered.push({
-        unitId: units[item.unitIndex]?.id ?? `unit_${item.unitIndex}`,
+        unitId: units[item.resultIndex]?.id ?? `unit_${item.resultIndex}`,
         questionId: item.questionId,
         message: message.replaceAll(/\s+/g, " ").trim().slice(0, 300),
       });
@@ -181,16 +185,16 @@ async function evaluateBatch(
     const checked = checkAnswer(item.question, result.answers[item.key]);
     if (typeof checked === "string") {
       unanswered.push({
-        unitId: units[item.unitIndex]?.id ?? `unit_${item.unitIndex}`,
+        unitId: units[item.resultIndex]?.id ?? `unit_${item.resultIndex}`,
         questionId: item.questionId,
         message: checked,
       });
       continue;
     }
-    let byUnit = results.get(item.unitIndex);
+    let byUnit = results.get(item.resultIndex);
     if (!byUnit) {
       byUnit = new Map();
-      results.set(item.unitIndex, byUnit);
+      results.set(item.resultIndex, byUnit);
     }
     byUnit.set(item.questionId, checked);
   }
@@ -257,12 +261,54 @@ export function summarize(
   return summary;
 }
 
+/** Headroom under REQUEST_BUDGET_CHARS so questions fit beside the state. */
+export const STATE_BUDGET_CHARS = 32_000;
+
+interface Shard {
+  units: Unit[];
+  items: PlannedQuestion[];
+}
+
+/** Group pending items so each shard's unit sources fit the state budget.
+ *  Item unitIndex values are remapped to the shard-local state; resultIndex
+ *  keeps pointing at the global unit for answers and cache keys. */
+export function shardItems(
+  units: Unit[],
+  pending: PlannedQuestion[],
+  budget: number = STATE_BUDGET_CHARS,
+): Shard[] {
+  const byUnit = new Map<number, PlannedQuestion[]>();
+  for (const item of pending) {
+    const list = byUnit.get(item.resultIndex) ?? [];
+    list.push(item);
+    byUnit.set(item.resultIndex, list);
+  }
+  const shards: Shard[] = [];
+  let current: Shard = { units: [], items: [] };
+  let currentSize = 0;
+  const flush = (): void => {
+    if (current.units.length > 0) shards.push(current);
+    current = { units: [], items: [] };
+    currentSize = 0;
+  };
+  units.forEach((unit, globalIndex) => {
+    const items = byUnit.get(globalIndex);
+    if (!items || items.length === 0) return;
+    if (current.units.length > 0 && currentSize + unit.source.length > budget) flush();
+    const localIndex = current.units.length;
+    current.units.push(unit);
+    currentSize += unit.source.length;
+    for (const item of items) current.items.push({ ...item, unitIndex: localIndex });
+  });
+  flush();
+  return shards;
+}
+
 export async function ask(input: AskInput): Promise<Report> {
   const { units, questions } = input;
   const results = new Map<number, Map<string, UnitAnswer>>();
   const unanswered: Unanswered[] = [];
   const usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-  const state = stateFor(units, input.context);
   const cacheDir =
     !input.dryRun && input.cache?.enabled === true
       ? (input.cache.dir ?? defaultCacheDir())
@@ -274,7 +320,7 @@ export async function ask(input: AskInput): Promise<Report> {
   if (cacheDir !== undefined) {
     const misses: PlannedQuestion[] = [];
     for (const item of pending) {
-      const unit = units[item.unitIndex];
+      const unit = units[item.resultIndex];
       const hit =
         unit === undefined
           ? undefined
@@ -284,36 +330,39 @@ export async function ask(input: AskInput): Promise<Report> {
         continue;
       }
       cacheHits += 1;
-      let byUnit = results.get(item.unitIndex);
+      let byUnit = results.get(item.resultIndex);
       if (!byUnit) {
         byUnit = new Map();
-        results.set(item.unitIndex, byUnit);
+        results.set(item.resultIndex, byUnit);
       }
       byUnit.set(item.questionId, hit);
     }
     pending = misses;
   }
-  const batches = chunkItems(JSON.stringify(state).length, pending);
+  const shards = shardItems(units, pending);
 
   let questionsAsked = 0;
   if (!input.dryRun && input.evaluator) {
-    for (const batch of batches) {
-      questionsAsked += batch.length;
-      await evaluateBatch(state, batch, input.evaluator, results, unanswered, units, usage);
-      if (cacheDir !== undefined) {
-        await Promise.all(
-          batch.map(async (item) => {
-            const answer = results.get(item.unitIndex)?.get(item.questionId);
-            const unit = units[item.unitIndex];
-            if (answer !== undefined && unit !== undefined) {
-              await writeCachedAnswer(cacheDir, cacheKey(model, unit.source, item.question), answer);
-            }
-          }),
-        );
+    for (const shard of shards) {
+      const shardState = stateFor(shard.units, input.context);
+      const batches = chunkItems(JSON.stringify(shardState).length, shard.items);
+      for (const batch of batches) {
+        questionsAsked += batch.length;
+        await evaluateBatch(shardState, batch, input.evaluator, results, unanswered, units, usage);
+        if (cacheDir !== undefined) {
+          await Promise.all(
+            batch.map(async (item) => {
+              const answer = results.get(item.resultIndex)?.get(item.questionId);
+              const unit = units[item.resultIndex];
+              if (answer !== undefined && unit !== undefined) {
+                await writeCachedAnswer(cacheDir, cacheKey(model, unit.source, item.question), answer);
+              }
+            }),
+          );
+        }
       }
     }
   }
-
   const unitResults: UnitResult[] = units.map((unit, index) => ({
     id: unit.id,
     path: unit.path,

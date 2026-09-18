@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { reachableFiles, splitFileUnits, splitFunctionUnits } from "../src/splitter.js";
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { collectFiles, reachableFiles, splitFileUnits, splitFunctionUnits } from "../src/splitter.js";
 
 describe("splitFileUnits", () => {
   it("makes one unit per file with full spans", () => {
@@ -59,5 +62,22 @@ describe("reachableFiles", () => {
 
   it("rejects an entry outside the scope", () => {
     expect(() => reachableFiles(files, "src/missing.ts", 3)).toThrow("entry not in scope");
+  });
+});
+
+describe("collectFiles", () => {
+  it("skips dangling symlinks and vanished entries instead of failing the scope", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rangerjev-walk-"));
+    mkdirSync(join(dir, "sub"));
+    writeFileSync(join(dir, "sub", "real.ts"), "export const x = 1;\n");
+    writeFileSync(join(dir, "notes.md"), "# hi\n");
+    symlinkSync(join(dir, "nope.ts"), join(dir, "sub", "dangling.ts"));
+    const files = await collectFiles(dir, ["."], []);
+    expect(files.map((file) => file.path).sort()).toEqual(["sub/real.ts"]);
+  });
+
+  it("still reports a missing root path", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rangerjev-walk-"));
+    await expect(collectFiles(dir, ["gone"], [])).rejects.toThrow("no such file or directory: gone");
   });
 });
