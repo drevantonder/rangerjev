@@ -41,14 +41,13 @@ Ask typed questions of a codebase.
   --escalate-below <p>   list choice/score answers with confidence below p (0-1)
   --ext <.a,.b>          extra file extensions beyond JS/TS (repeatable)
   --max-units <n>        ask only the first n units in path order
-  --format <f>           json (default) or text
   --dry-run              enumerate units and count questions, zero live requests
   --no-cache             skip the response cache (on by default)
   --cache-dir <path>     cache directory (default: $XDG_CACHE_HOME/rangerjev)
   --version              print the version
   --help                 show this help
 
-Stdout carries only the report JSON (or text with --format text). All chatter
+Stdout carries only the report JSON. All chatter
 goes to stderr. Exit 0 means every unit was answered; exit 1 means invalid
 input, a provider failure, or unanswered questions.
 `;
@@ -72,7 +71,6 @@ interface Options {
   contextPath?: string;
   extraExts: string[];
   maxUnits?: number;
-  format: "json" | "text";
   dryRun: boolean;
 }
 
@@ -80,9 +78,6 @@ function fail(stderr: (text: string) => void, message: string): number {
   stderr(`rangerjev: ${message}\n`);
   return 1;
 }
-
-/** How many unanswered items get their own stderr line before summarizing. */
-const MAX_UNANSWERED_SHOWN = 10;
 
 function parseCount(raw: string | undefined, flag: string, min: number): number | undefined {
   if (raw === undefined) return undefined;
@@ -105,7 +100,6 @@ function parseArgs(args: string[]): Options {
     depth: 3,
     inline: { booleans: [], choices: [], choicesFor: [], scores: [], levelsFor: [] },
     extraExts: [],
-    format: "json",
     dryRun: false,
   };
   for (let index = 0; index < args.length; index += 1) {
@@ -155,13 +149,7 @@ function parseArgs(args: string[]): Options {
           .filter((ext) => ext !== ""),
       );
     } else if (arg === "--max-units") options.maxUnits = parseCount(next(), "--max-units", 1);
-    else if (arg === "--format") {
-      const value = next();
-      if (value !== "json" && value !== "text") {
-        throw new Error(`--format must be json or text, got: ${value}`);
-      }
-      options.format = value;
-    } else if (arg === "--dry-run") options.dryRun = true;
+    else if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--no-cache") options.noCache = true;
     else if (arg === "--cache-dir") options.cacheDir = next();
     else if (arg === "--") {
@@ -174,41 +162,6 @@ function parseArgs(args: string[]): Options {
     }
   }
   return options;
-}
-
-function formatText(report: Report): string {
-  const lines: string[] = [];
-  for (const unit of report.units) {
-    for (const [id, answer] of Object.entries(unit.answers)) {
-      if (answer.type === "boolean") lines.push(`${answer.probability.toFixed(3)}  ${unit.path}  ${id}`);
-      else if (answer.type === "choice") lines.push(`${answer.choice}  ${unit.path}  ${id}`);
-      else lines.push(`${answer.score.toFixed(2)}  ${unit.path}  ${id}`);
-    }
-    if (Object.keys(unit.answers).length === 0) lines.push(`---  ${unit.path}  unanswered`);
-  }
-  for (const [id, entry] of Object.entries(report.summary)) {
-    if (entry.type === "boolean") {
-      lines.push(`# ${id}: n=${entry.n} mean=${entry.mean.toFixed(3)} yes=${entry.yes}`);
-    } else if (entry.type === "choice") {
-      const counts = Object.entries(entry.counts)
-        .map(([choice, n]) => `${choice}=${n}`)
-        .join(" ");
-      lines.push(`# ${id}: n=${entry.n} ${counts}`);
-    } else {
-      lines.push(
-        `# ${id}: n=${entry.n} mean=${entry.mean.toFixed(2)} min=${entry.min.toFixed(2)} max=${entry.max.toFixed(2)}`,
-      );
-    }
-  }
-  for (const item of report.escalations) {
-    lines.push(`! ${item.confidence.toFixed(2)}  ${item.unitId}  ${item.questionId}`);
-  }
-  lines.push(
-    `${report.coverage.unitsAsked}/${report.coverage.unitsEnumerated} units asked; ` +
-      `${report.coverage.questionsAsked} questions; ` +
-      `${report.coverage.unanswered.length} unanswered`,
-  );
-  return lines.join("\n");
 }
 
 export async function runCli(
@@ -312,7 +265,7 @@ export async function runCli(
       `rangerjev: dry run: ${units.length} units x ${questions.length} questions = ${planned} planned questions, 0 live requests\n`,
     );
     const report = await ask({ units, questions, context, dryRun: true });
-    stdout(`${options.format === "json" ? JSON.stringify(report, null, 2) : formatText(report)}\n`);
+    stdout(`${JSON.stringify(report, null, 2)}\n`);
     return 0;
   }
 
@@ -335,15 +288,9 @@ export async function runCli(
     return fail(stderr, error instanceof Error ? error.message : String(error));
   }
 
-  stdout(`${options.format === "json" ? JSON.stringify(report, null, 2) : formatText(report)}\n`);
+  stdout(`${JSON.stringify(report, null, 2)}\n`);
   if (report.cache.enabled) {
     stderr(`rangerjev: cache ${report.cache.hits} hits, ${report.cache.misses} misses\n`);
-  }
-  for (const item of report.coverage.unanswered.slice(0, MAX_UNANSWERED_SHOWN)) {
-    stderr(`rangerjev: unanswered ${item.unitId} ${item.questionId}: ${item.message}\n`);
-  }
-  if (report.coverage.unanswered.length > MAX_UNANSWERED_SHOWN) {
-    stderr(`rangerjev: ${report.coverage.unanswered.length - MAX_UNANSWERED_SHOWN} more unanswered omitted\n`);
   }
   return report.coverage.complete ? 0 : 1;
 }

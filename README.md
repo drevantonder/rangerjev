@@ -32,7 +32,7 @@ First survey in under a minute:
 
 ```sh
 cd your-project
-rangerjev src/ --by file --dry-run --format text   # verify scope, zero cost
+rangerjev src/ --by file --dry-run   # verify scope, zero cost
 rangerjev src/ --by file \
   --score "read=How readable is this code?" \
   --levels "read=opaque,effortful,clear,exemplary"
@@ -91,7 +91,7 @@ on ordered levels). `noul` is accepted as an alias for `boolean`.
 
 ## Output
 
-JSON on stdout (default). Human chatter, dry-run counts, and failure notes go
+JSON on stdout. Dry-run counts, cache notes, and failure notes go
 to stderr. Exit `0` means every unit was answered; exit `1` means invalid
 input, a provider failure, or at least one unanswered question.
 
@@ -117,7 +117,7 @@ input, a provider failure, or at least one unanswered question.
 }
 ```
 
-`--format text` prints one line per unit plus the summary, for humans.
+`--format text` is gone: stdout is always JSON. Point it at a file.
 
 ## Custom splitters
 
@@ -163,7 +163,6 @@ export default defineUnitFinder("effects", (file, { program }) => {
 --escalate-below <p>   list choice/score answers with confidence below p (0-1)
 --ext <.a,.b>          extra file extensions beyond JS/TS (repeatable or comma list)
 --max-units <n>        ask only the first n units in path order
---format <f>           json (default) or text
 --dry-run              enumerate units and count questions, zero live requests
 --no-cache             skip the response cache (on by default)
 --cache-dir <path>     cache directory (default: $XDG_CACHE_HOME/rangerjev)

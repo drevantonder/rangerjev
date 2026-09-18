@@ -24,12 +24,11 @@ decides pass/fail. It reports probabilities that agents and humans compose.
    or `--questions q.json` when criteria need prose. Keep ids short; they key
    the answers. Prefer one combined run over per-question runs — batching
    shares state and the cache dedupes repeats.
-3. Dry-run first with `--format text` (zero live requests, verifies the scope
-   without flooding stdout):
-   `rangerjev <paths> --by <kind> <questions> --dry-run --format text`.
+3. Dry-run first (zero live requests, verifies the scope):
+   `rangerjev <paths> --by <kind> <questions> --dry-run`. Stdout is always
+   JSON, so point it at a file.
 4. Run live with JSON redirected to a file (`> report.json`) and stderr
-   separate — never pipe a full report through `tail`. Large scopes shard
-   automatically; no manual sharding needed.
+   separate. Large scopes shard automatically; no manual sharding needed.
 5. Read the report: `units[].answers` per unit, `summary` for aggregates
    (score means plus the 5 `lowest` ids — start triage there), `escalations`
    when `--escalate-below` is set (low-confidence review list, worst first),
