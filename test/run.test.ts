@@ -63,6 +63,46 @@ describe("ask", () => {
     expect(report.coverage.unitsAsked).toBe(0);
     expect(report.coverage.complete).toBe(true);
   });
+
+  it("marks everything unanswered when the provider throws", async () => {
+    const report = await ask({
+      units,
+      questions: questions(),
+      evaluator: {
+        ask: async () => {
+          throw new Error("boom");
+        },
+      },
+    });
+    expect(report.coverage.complete).toBe(false);
+    expect(report.coverage.unanswered).toHaveLength(2);
+    expect(report.coverage.unanswered[0]?.message).toContain("boom");
+  });
+
+  it("splits batches recursively on token-limit errors", async () => {
+    let calls = 0;
+    const report = await ask({
+      units,
+      questions: questions(),
+      evaluator: {
+        ask: async (_state, payload) => {
+          calls += 1;
+          if (Object.keys(payload).length > 1) {
+            throw new Error("max_tokens exceeded");
+          }
+          return {
+            answers: Object.fromEntries(
+              Object.keys(payload).map((key) => [key, { type: "noul", noul: 0.4 }]),
+            ),
+            usage: { inputTokens: 1, outputTokens: 0, totalTokens: 1 },
+          };
+        },
+      },
+    });
+    expect(calls).toBeGreaterThan(1);
+    expect(report.coverage.complete).toBe(true);
+    expect(report.coverage.questionsAsked).toBe(2);
+  });
 });
 
 describe("shardItems", () => {

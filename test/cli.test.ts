@@ -23,4 +23,19 @@ describe("runCli --help", () => {
     expect(code).toBe(0);
     expect(stdout.join("")).toMatch(/^rangerjev \d+\.\d+\.\d+/);
   });
+
+  it.each([
+    [["src", "--bogus"], "unknown flag"],
+    [["src", "--by", "file"], "no questions"],
+    [["src", "--by", "file", "--escalate-below", "2"], "--escalate-below"],
+  ])("fails fast on invalid input: %s", async (args, message) => {
+    const stderr: string[] = [];
+    const code = await runCli(args, {
+      cwd: process.cwd(),
+      stdout: () => undefined,
+      stderr: (text: string) => stderr.push(text),
+    });
+    expect(code).toBe(1);
+    expect(stderr.join("")).toContain(message);
+  });
 });

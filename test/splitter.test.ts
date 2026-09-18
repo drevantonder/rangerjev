@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectFiles, reachableFiles, splitFileUnits, splitFunctionUnits } from "../src/splitter.js";
+import {
+  collectFiles,
+  loadUnitFinder,
+  reachableFiles,
+  splitCustom,
+  splitFileUnits,
+  splitFunctionUnits,
+} from "../src/splitter.js";
 
 describe("splitFileUnits", () => {
   it("makes one unit per file with full spans", () => {
@@ -84,5 +91,30 @@ describe("collectFiles", () => {
   it("still reports a missing root path", async () => {
     const dir = mkdtempSync(join(tmpdir(), "rangerjev-walk-"));
     await expect(collectFiles(dir, ["gone"], [])).rejects.toThrow("no such file or directory: gone");
+  });
+});
+
+describe("loadUnitFinder", () => {
+  it("rejects modules without a finder export", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rangerjev-finder-"));
+    writeFileSync(join(dir, "bad.mjs"), "export default 42;\n");
+    await expect(loadUnitFinder(dir, "bad.mjs")).rejects.toThrow(
+      "must default-export a function or { find }",
+    );
+  });
+
+  it("loads a default-exported finder", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rangerjev-finder-"));
+    writeFileSync(
+      join(dir, "one.mjs"),
+      "export default (files) => files.map((f) => ({ path: f.path }));\n",
+    );
+    const finder = await loadUnitFinder(dir, "one.mjs");
+    const units = await splitCustom(
+      [{ path: "a.ts", source: "const a = 1;\n" }],
+      finder,
+    );
+    expect(units).toHaveLength(1);
+    expect(units[0]?.path).toBe("a.ts");
   });
 });
