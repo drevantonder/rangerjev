@@ -79,6 +79,25 @@ describe("ask", () => {
     expect(report.coverage.unanswered[0]?.message).toContain("boom");
   });
 
+  it("marks singletons unanswered when even they exceed the token limit", async () => {
+    let calls = 0;
+    const report = await ask({
+      units,
+      questions: questions(),
+      evaluator: {
+        ask: async () => {
+          calls += 1;
+          throw new Error("max_tokens exceeded");
+        },
+      },
+    });
+    // one failed batch of two, then two failed singletons: nothing left to split
+    expect(calls).toBe(3);
+    expect(report.coverage.complete).toBe(false);
+    expect(report.coverage.unanswered).toHaveLength(2);
+    expect(report.coverage.unanswered[0]?.message).toContain("max_tokens");
+  });
+
   it("splits batches recursively on token-limit errors", async () => {
     let calls = 0;
     const report = await ask({
