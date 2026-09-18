@@ -43,7 +43,6 @@ function stateFor(units: Unit[], context?: string): { [key: string]: JsonValue }
 }
 
 function plannedQuestions(units: Unit[], questions: NamedQuestion[]): PlannedQuestion[] {
-  void units;
   const planned: PlannedQuestion[] = [];
   units.forEach((_unit, unitIndex) => {
     for (const question of questions) {

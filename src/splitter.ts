@@ -189,7 +189,7 @@ function specifierTargets(from: string, specifier: string): string[] {
 
 export function reachableFiles(files: ProjectFile[], entry: string, depth: number): ProjectFile[] {
   const byPath = new Map(files.map((file) => [file.path, file]));
-  const normalizedEntry = entry.replace(/\\/g, "/");
+  const normalizedEntry = entry.replace(/\\/g, "/").replace(/^\.\//, "");
   if (!byPath.has(normalizedEntry)) {
     throw new Error(`entry not in scope: ${entry}`);
   }
@@ -301,7 +301,14 @@ export async function splitCustom(files: ProjectFile[], finder: UnitFinder): Pro
   const byPath = new Map(files.map((file) => [file.path, file.source]));
   raw.forEach((item, index) => {
     const parsed = splitterUnitSchema.parse(item) as SplitterUnit;
-    const path = parsed.path ?? described[index]?.path ?? `unit_${index}`;
+    const fallbackPath = parsed.path ?? (files.length === 1 ? files[0]?.path : undefined);
+    if (fallbackPath === undefined) {
+      throw new Error(
+        `unit finder returned a unit with no path (index ${index}); ` +
+          "set path per unit when splitting multiple files",
+      );
+    }
+    const path = fallbackPath;
     const owner = byPath.get(path) ?? "";
     const span = parsed.span;
     let source = parsed.source;
