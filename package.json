@@ -11,9 +11,24 @@
   "bugs": {
     "url": "https://github.com/drevantonder/rangerjev/issues"
   },
-  "keywords": ["code-review", "static-analysis", "cli", "typescript", "jev", "typesafe"],
-  "files": ["dist", "README.md", "LICENSE"],
-  "os": ["darwin", "linux", "win32"],
+  "keywords": [
+    "code-review",
+    "static-analysis",
+    "cli",
+    "typescript",
+    "jev",
+    "typesafe"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
   "type": "module",
   "bin": {
     "rangerjev": "./dist/cli.js"
@@ -41,6 +56,7 @@
   },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.6.0",
+    "env-paths": "^4.0.0",
     "jiti": "^2.6.1",
     "oxc-parser": "^0.150.0",
     "zod": "^4.6.5"
