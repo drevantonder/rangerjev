@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -43,6 +44,7 @@ input, a provider failure, or unanswered questions.
 
 interface Options {
   paths: string[];
+  showHelp: boolean;
   by: SplitterKind;
   entry?: string;
   depth: number;
@@ -73,6 +75,7 @@ function parseCount(raw: string | undefined, flag: string, min: number): number 
 function parseArgs(args: string[]): Options {
   const options: Options = {
     paths: [],
+    showHelp: false,
     by: "file",
     depth: 3,
     inline: { booleans: [], choices: [], choicesFor: [], scores: [], levelsFor: [] },
@@ -89,8 +92,7 @@ function parseArgs(args: string[]): Options {
       return value;
     };
     if (arg === "--help") {
-      process.stdout.write(HELP);
-      process.exit(0);
+      options.showHelp = true;
     } else if (arg === "--by") {
       const value = next();
       if (value !== "file" && value !== "function" && value !== "call-tree") {
@@ -183,6 +185,10 @@ export async function runCli(
     return fail(stderr, error instanceof Error ? error.message : String(error));
   }
   const cwd = dependencies.cwd ?? process.cwd();
+  if (options.showHelp) {
+    stdout(HELP);
+    return 0;
+  }
 
   let questions: NamedQuestion[];
   try {
@@ -264,6 +270,15 @@ export async function runCli(
 }
 
 const invokedPath = process.argv[1];
-if (invokedPath && import.meta.url === pathToFileURL(invokedPath).href) {
-  process.exitCode = await runCli(process.argv.slice(2));
+if (invokedPath) {
+  // realpath: the bin is a symlink under npm -g / npm link installs.
+  let invokedUrl: string | undefined;
+  try {
+    invokedUrl = pathToFileURL(realpathSync(invokedPath)).href;
+  } catch {
+    invokedUrl = undefined;
+  }
+  if (invokedUrl !== undefined && import.meta.url === invokedUrl) {
+    process.exitCode = await runCli(process.argv.slice(2));
+  }
 }
