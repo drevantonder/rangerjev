@@ -35,6 +35,18 @@ describe("parseInline", () => {
       parseInline({ booleans: ["q=One?", "q=Two?"], choices: [], choicesFor: [], scores: [], levelsFor: [] }),
     ).toThrow("duplicate question id");
   });
+
+  it("rejects a score with fewer than two levels", () => {
+    expect(() =>
+      parseInline({
+        booleans: [],
+        choices: [],
+        choicesFor: [],
+        scores: ["read=How readable?"],
+        levelsFor: ["read=only"],
+      }),
+    ).toThrow("at least two levels");
+  });
 });
 
 describe("batching", () => {
