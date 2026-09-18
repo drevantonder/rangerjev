@@ -4,7 +4,7 @@ Ask typed questions of a codebase. Units in, probabilities out.
 
 `rangerjev` splits code into units (files, functions, or a call-tree slice),
 asks one Jev judgment per unit, and aggregates the answers in code. It never
-generates prose and never decides pass/fail — it reports probabilities that
+generates prose and never decides pass/fail. It reports probabilities that
 agents and humans can compose.
 
 ## Install
@@ -50,7 +50,7 @@ rangerjev src/ --by function \
   --boolean "leak=Does this leak resources?" \
   --choice "owner=Who owns this?" --choices "owner=auth,billing,infra,none"
 
-# richer criteria live in a file (commas, contrasts, examples)
+# richer criteria live in a file (commas, examples, contrasts need room)
 rangerjev src/ --by file --questions q.json
 
 # follow imports from an entry point, 3 deep (relative imports only;
@@ -119,8 +119,8 @@ input, a provider failure, or at least one unanswered question.
 `--unit-finder` loads a module with `jiti`. It must default-export either a
 finder function or `{ find }`. Finder input is `{ path, source }` per file plus
 parsed-program helpers; output is `{ id, path, source, span? }` per unit.
-`oxc-parser` (`Visitor`, `parseSync`, node types) is re-exported from
-`rangerjev/oxc` so splitters pin the same parser version as the CLI.
+`oxc-parser` (`Visitor`, `parseSync`, node types) comes re-exported from
+`rangerjev/oxc`, so splitters use the same parser version as the CLI.
 
 ```ts
 import { defineUnitFinder } from "rangerjev";
@@ -165,7 +165,7 @@ export default defineUnitFinder("effects", (file, { program }) => {
 --help                 show help
 ```
 
-Auth: `TYPESAFE_API_KEY` in the environment. Failing that, the CLI exits 1
+Auth: `TYPESAFE_API_KEY` in the environment. Without it, the CLI exits 1
 before any request.
 Model override: `RANGERJEV_MODEL` (default `jev-1.13.0`). Endpoint override:
 `TYPESAFE_BASE_URL`.
@@ -177,8 +177,8 @@ with working-tree edits (plus `--base <ref>` for branch diffs). Both compose
 with `--by file|function` and `--max-units`.
 
 `--escalate-below <p>` collects choice/score answers reported below confidence
-`p` into `escalations` (worst first) — the review list. Boolean answers never
-escalate: Jev reports no confidence for yes/no judgments.
+`p` into `escalations`, worst first. That list is your review queue. Boolean
+answers never escalate: Jev reports no confidence for yes/no judgments.
 
 ## Roadmap
 
@@ -186,8 +186,8 @@ escalate: Jev reports no confidence for yes/no judgments.
 
 ## Cache
 
-Answers are cached content-addressed under `$XDG_CACHE_HOME/rangerjev`
+rangerjev caches answers by content under `$XDG_CACHE_HOME/rangerjev`
 (fallback `~/.cache/rangerjev`), keyed by model + unit source + question.
-Repeat runs only spend credits on changed code; `--no-cache` opts out and
+Repeat runs only spend credits on changed code. `--no-cache` opts out and
 `--cache-dir` overrides the location. The report's `cache` field shows hits
 and misses, and hit/miss counts also go to stderr.
