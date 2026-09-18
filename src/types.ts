@@ -89,6 +89,13 @@ export interface Unanswered {
   message: string;
 }
 
+export interface Escalation {
+  unitId: string;
+  questionId: string;
+  /** Reported confidence that fell below the --escalate-below threshold. */
+  confidence: number;
+}
+
 export interface ReportSummary {
   [questionId: string]:
     | { type: "boolean"; n: number; mean: number; yes: number }
@@ -102,6 +109,10 @@ export interface Report {
   summary: ReportSummary;
   usage: { inputTokens: number; outputTokens: number; totalTokens: number };
   cache: { enabled: boolean; hits: number; misses: number };
+  /** Choice/score answers below the escalation threshold, worst first.
+   *  Empty unless --escalate-below is set. Boolean answers never escalate:
+   *  Jev reports no confidence for yes/no judgments. */
+  escalations: Escalation[];
   coverage: {
     unitsEnumerated: number;
     unitsAsked: number;

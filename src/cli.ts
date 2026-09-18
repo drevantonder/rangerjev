@@ -11,6 +11,9 @@ import type { InlineQuestions } from "./questions.js";
 import { ask } from "./run.js";
 import {
   collectFiles,
+  filterTestFiles,
+  filterToPaths,
+  gitChangedPaths,
   loadUnitFinder,
   splitBy,
   splitCustom,
@@ -32,6 +35,10 @@ Ask typed questions of a codebase. Units in, probabilities out.
   --score <id=text>      ordered-level question (repeatable)
   --levels <id=a,b,..>   ordered levels, low to high (repeatable)
   --context <path>       extra text file included once in every request state
+  --tests-only           only test files (*.test.*, tests/, __tests__/)
+  --changed              only files changed in the working tree (git)
+  --base <ref>           with --changed, also include files differing from <ref>
+  --escalate-below <p>   list choice/score answers with confidence below p (0-1)
   --ext <.a,.b>          extra file extensions beyond JS/TS (repeatable)
   --max-units <n>        ask only the first n units in path order
   --format <f>           json (default) or text
@@ -52,6 +59,10 @@ interface Options {
   showVersion: boolean;
   noCache: boolean;
   cacheDir?: string;
+  testsOnly: boolean;
+  changed: boolean;
+  base?: string;
+  escalateBelow?: number;
   by: SplitterKind;
   entry?: string;
   depth: number;
@@ -85,6 +96,8 @@ function parseArgs(args: string[]): Options {
     showHelp: false,
     showVersion: false,
     noCache: false,
+    testsOnly: false,
+    changed: false,
     by: "file",
     depth: 3,
     inline: { booleans: [], choices: [], choicesFor: [], scores: [], levelsFor: [] },
@@ -120,6 +133,17 @@ function parseArgs(args: string[]): Options {
     else if (arg === "--score") options.inline.scores.push(next());
     else if (arg === "--levels") options.inline.levelsFor.push(next());
     else if (arg === "--context") options.contextPath = next();
+    else if (arg === "--tests-only") options.testsOnly = true;
+    else if (arg === "--changed") options.changed = true;
+    else if (arg === "--base") options.base = next();
+    else if (arg === "--escalate-below") {
+      const raw = next();
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value < 0 || value > 1) {
+        throw new Error(`--escalate-below must be between 0 and 1, got: ${raw}`);
+      }
+      options.escalateBelow = value;
+    }
     else if (arg === "--ext") {
       options.extraExts.push(
         ...next()
@@ -172,6 +196,9 @@ function formatText(report: Report): string {
         `# ${id}: n=${entry.n} mean=${entry.mean.toFixed(2)} min=${entry.min.toFixed(2)} max=${entry.max.toFixed(2)}`,
       );
     }
+  }
+  for (const item of report.escalations) {
+    lines.push(`! ${item.confidence.toFixed(2)}  ${item.unitId}  ${item.questionId}`);
   }
   lines.push(
     `${report.coverage.unitsAsked}/${report.coverage.unitsEnumerated} units asked; ` +
@@ -234,6 +261,24 @@ export async function runCli(
   if (files.length === 0) {
     return fail(stderr, "no source files matched the given paths");
   }
+  if (options.testsOnly) {
+    files = filterTestFiles(files);
+    if (files.length === 0) {
+      return fail(stderr, "--tests-only matched no test files in the given paths");
+    }
+  }
+  if (options.changed || options.base !== undefined) {
+    let changed: string[];
+    try {
+      changed = await gitChangedPaths(cwd, options.base);
+    } catch (error) {
+      return fail(stderr, error instanceof Error ? error.message : String(error));
+    }
+    files = filterToPaths(files, changed);
+    if (files.length === 0) {
+      return fail(stderr, "--changed matched no collected files (nothing changed or scope excludes them)");
+    }
+  }
 
   let units: Unit[];
   try {
@@ -281,6 +326,7 @@ export async function runCli(
       evaluator,
       model: evaluator.model,
       cache: { enabled: !options.noCache, dir: options.cacheDir },
+      escalateBelow: options.escalateBelow,
     });
   } catch (error) {
     return fail(stderr, error instanceof Error ? error.message : String(error));

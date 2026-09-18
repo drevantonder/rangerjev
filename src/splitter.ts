@@ -1,4 +1,6 @@
 import { readdir, readFile, lstat } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { extname, join, posix, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseSync, Visitor } from "oxc-parser";
@@ -128,6 +130,73 @@ export async function collectFiles(
     files.push({ path, source: await readFile(resolve(cwd, path), "utf8") });
   }
   return files;
+}
+
+const execFileAsync = promisify(execFile);
+
+const TEST_BASENAME = /(^|[._-])(test|spec)\.[^/]+$/;
+const TEST_DIR = /(^|\/)(__tests__|tests?)(\/|$)/;
+
+/** Test files by name (*.test.ts, foo.spec.js) or location (tests/, __tests__/). */
+export function isTestFile(path: string): boolean {
+  const posixPath = path.replace(/\\/g, "/");
+  const base = posixPath.slice(posixPath.lastIndexOf("/") + 1);
+  return TEST_DIR.test(posixPath) || TEST_BASENAME.test(base);
+}
+
+export function filterTestFiles(files: ProjectFile[]): ProjectFile[] {
+  return files.filter((file) => isTestFile(file.path));
+}
+
+/** Intersect collected files with an external path list (git output, etc.). */
+export function filterToPaths(files: ProjectFile[], paths: Iterable<string>): ProjectFile[] {
+  const wanted = new Set(
+    [...paths].map((path) => path.replace(/\\/g, "/").replace(/^\.\//, "")),
+  );
+  return files.filter((file) => wanted.has(file.path));
+}
+
+function parsePorcelain(stdout: string): string[] {
+  const out: string[] = [];
+  for (const line of stdout.split("\n")) {
+    if (line.length < 4) continue;
+    // Renames carry "old -> new"; the new path holds the content.
+    const raw = line.slice(3);
+    out.push(raw.includes(" -> ") ? (raw.split(" -> ").pop() as string) : raw);
+  }
+  return out;
+}
+
+/** Repo-relative changed paths: working-tree edits plus, with a base ref,
+ *  everything the base is missing. Throws with git's message when git fails. */
+export async function gitChangedPaths(cwd: string, base?: string): Promise<string[]> {
+  const run = async (args: string[]): Promise<string> => {
+    try {
+      const { stdout } = await execFileAsync("git", args, { cwd });
+      return stdout;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`git ${args[0]} failed: ${detail.replaceAll(/\s+/g, " ").trim().slice(0, 200)}`);
+    }
+  };
+  const toplevel = (await run(["rev-parse", "--show-toplevel"])).trim();
+  const toCwd = relative(toplevel, resolve(cwd, ".")).split(sep).join("/");
+  const rebase = (path: string): string => {
+    const normalized = path.startsWith('"') ? (JSON.parse(path) as string) : path;
+    if (toCwd === "" || toCwd === ".") return normalized;
+    const prefix = `${toCwd}/`;
+    return normalized.startsWith(prefix) ? normalized.slice(prefix.length) : normalized;
+  };
+  const changed = new Set<string>();
+  for (const path of parsePorcelain(await run(["status", "--porcelain=v1", "-uall"])))
+    changed.add(rebase(path));
+  if (base !== undefined) {
+    for (const line of (await run(["diff", "--name-only", `${base}...HEAD`, "--"])).split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed !== "") changed.add(rebase(trimmed));
+    }
+  }
+  return [...changed];
 }
 
 function fileUnit(file: ProjectFile, suffix = "file"): Unit {

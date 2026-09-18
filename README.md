@@ -121,6 +121,10 @@ export default defineUnitFinder("effects", (file, { program }) => {
 --score <id=text>      ordered-level question (repeatable)
 --levels <id=a,b,..>   ordered levels, low to high (repeatable)
 --context <path>       extra text file included once in every request state
+--tests-only           only test files (*.test.*, tests/, __tests__/)
+--changed              only files changed in the working tree (git)
+--base <ref>           with --changed, also include files differing from <ref>
+--escalate-below <p>   list choice/score answers with confidence below p (0-1)
 --ext <.a,.b>          extra file extensions beyond JS/TS (repeatable or comma list)
 --max-units <n>        ask only the first n units in path order
 --format <f>           json (default) or text
@@ -135,10 +139,19 @@ uses via its SDK fallback). Failing that, the CLI exits 1 before any request.
 Model override: `RANGERJEV_MODEL` (default `jev-1.13.0`). Endpoint override:
 `TYPESAFE_BASE_URL`.
 
+## Presets and escalation
+
+`--tests-only` narrows any scope to test files; `--changed` narrows to files
+with working-tree edits (plus `--base <ref>` for branch diffs). Both compose
+with `--by file|function` and `--max-units`.
+
+`--escalate-below <p>` collects choice/score answers reported below confidence
+`p` into `escalations` (worst first) — the review list. Boolean answers never
+escalate: Jev reports no confidence for yes/no judgments.
+
 ## Roadmap
 
-- `--by` presets beyond file/function/call-tree (e.g. tests-only, changed-files)
-- Confidence-gated escalation lists for low-confidence units
+- More `--by` splitters (e.g. call-tree over tests, dependency layers)
 
 ## Cache
 

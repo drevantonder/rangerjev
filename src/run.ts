@@ -3,6 +3,7 @@ import type { BatchAnswer, RangerEvaluator } from "./evaluator.js";
 import { DEFAULT_MODEL } from "./evaluator.js";
 import { cacheKey, defaultCacheDir, readCachedAnswer, writeCachedAnswer } from "./cache.js";
 import type {
+  Escalation,
   NamedQuestion,
   Report,
   ReportSummary,
@@ -36,6 +37,8 @@ export interface AskInput {
   model?: string;
   /** Response cache. Enabled only when set; the CLI enables it by default. */
   cache?: { enabled: boolean; dir?: string };
+  /** Report choice/score answers below this confidence as escalations. */
+  escalateBelow?: number;
 }
 
 function stateFor(units: Unit[], context?: string): { [key: string]: JsonValue } {
@@ -370,12 +373,30 @@ export async function ask(input: AskInput): Promise<Report> {
     answers: Object.fromEntries(results.get(index) ?? new Map()),
   }));
 
+  const threshold = input.escalateBelow;
+  const escalations: Escalation[] = [];
+  if (threshold !== undefined) {
+    units.forEach((unit, index) => {
+      results.get(index)?.forEach((answer, questionId) => {
+        if (
+          (answer.type === "choice" || answer.type === "score") &&
+          typeof answer.confidence === "number" &&
+          answer.confidence < threshold
+        ) {
+          escalations.push({ unitId: unit.id, questionId, confidence: answer.confidence });
+        }
+      });
+    });
+    escalations.sort((a, b) => a.confidence - b.confidence);
+  }
+
   return {
     version: 1,
     units: unitResults,
     summary: summarize(units, results, questions),
     usage,
     cache: { enabled: cacheDir !== undefined, hits: cacheHits, misses: questionsAsked },
+    escalations,
     coverage: {
       unitsEnumerated: units.length,
       unitsAsked: input.dryRun ? 0 : units.length,
