@@ -34,6 +34,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
     "check": "tsc --noEmit && vitest run",
     "test": "vitest run",
     "rangerjev": "node dist/cli.js"
