@@ -2,6 +2,18 @@
   "name": "rangerjev",
   "version": "0.1.0",
   "description": "Ask typed questions of a codebase. Units in, probabilities out.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/drevantonder/rangerjev.git"
+  },
+  "homepage": "https://github.com/drevantonder/rangerjev#readme",
+  "bugs": {
+    "url": "https://github.com/drevantonder/rangerjev/issues"
+  },
+  "keywords": ["code-review", "static-analysis", "cli", "typescript", "jev", "typesafe"],
+  "files": ["dist", "README.md", "LICENSE"],
+  "os": ["darwin", "linux", "win32"],
   "type": "module",
   "bin": {
     "rangerjev": "./dist/cli.js"

@@ -7,6 +7,36 @@ asks one Jev judgment per unit, and aggregates the answers in code. It never
 generates prose and never decides pass/fail — it reports probabilities that
 agents and humans can compose.
 
+## Install
+
+Requirements: Node.js 22+ and a `TYPESAFE_API_KEY` (dry runs need no key).
+`--changed` also needs git on `PATH`. Works on macOS, Linux, and Windows.
+
+```sh
+npm install -g rangerjev      # one command, global binary
+# or run without installing:
+npx -y rangerjev --help
+# or from source:
+git clone https://github.com/drevantonder/rangerjev.git && cd rangerjev \
+  && npm install && npm run build && npm link
+```
+
+Set the key once per shell (or export it from your profile):
+
+```sh
+export TYPESAFE_API_KEY="..."
+```
+
+First survey in under a minute:
+
+```sh
+cd your-project
+rangerjev src/ --by file --dry-run --format text   # verify scope, zero cost
+rangerjev src/ --by file \
+  --score "read=How readable is this code?" \
+  --levels "read=opaque,effortful,clear,exemplary"
+```
+
 ## Usage
 
 ```sh

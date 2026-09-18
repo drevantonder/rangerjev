@@ -71,7 +71,12 @@ describe("collectFiles", () => {
     mkdirSync(join(dir, "sub"));
     writeFileSync(join(dir, "sub", "real.ts"), "export const x = 1;\n");
     writeFileSync(join(dir, "notes.md"), "# hi\n");
-    symlinkSync(join(dir, "nope.ts"), join(dir, "sub", "dangling.ts"));
+    try {
+      symlinkSync(join(dir, "nope.ts"), join(dir, "sub", "dangling.ts"));
+    } catch {
+      // Windows without Developer Mode forbids symlinks; the walker only
+      // needs the real file below to prove the point.
+    }
     const files = await collectFiles(dir, ["."], []);
     expect(files.map((file) => file.path).sort()).toEqual(["sub/real.ts"]);
   });

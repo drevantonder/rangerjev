@@ -7,8 +7,16 @@ import type { NamedQuestion, UnitAnswer } from "./types.js";
 const CACHE_VERSION = 1;
 
 export function defaultCacheDir(env: NodeJS.ProcessEnv = process.env): string {
-  const base = env["XDG_CACHE_HOME"]?.trim() || join(homedir(), ".cache");
-  return join(base, "rangerjev", `v${CACHE_VERSION}`);
+  const xdg = env["XDG_CACHE_HOME"]?.trim();
+  if (xdg) return join(xdg, "rangerjev", `v${CACHE_VERSION}`);
+  // Platform-native cache roots; XDG above wins everywhere including Windows.
+  if (process.platform === "win32" && env["LOCALAPPDATA"]?.trim()) {
+    return join(env["LOCALAPPDATA"] as string, "rangerjev", `Cache/v${CACHE_VERSION}`);
+  }
+  if (process.platform === "darwin") {
+    return join(homedir(), "Library", "Caches", "rangerjev", `v${CACHE_VERSION}`);
+  }
+  return join(homedir(), ".cache", "rangerjev", `v${CACHE_VERSION}`);
 }
 
 /** Content-addressed key: same model + source + question always hits. */
