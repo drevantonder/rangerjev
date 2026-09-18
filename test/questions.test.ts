@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ask } from "../src/run.js";
-import { parseInline } from "../src/questions.js";
+import { parseInline, parseQuestionsText } from "../src/questions.js";
 import type { Unit } from "../src/types.js";
 
 const units: Unit[] = [
@@ -77,5 +77,42 @@ describe("batching", () => {
     expect(calls).toBe(1);
     expect(report.coverage.questionsAsked).toBe(2);
     expect(report.coverage.complete).toBe(true);
+  });
+});
+
+describe("parseQuestionsText", () => {
+  it("builds typed questions from parsed JSON", () => {
+    const out = parseQuestionsText(
+      {
+        read: { type: "score", instructions: "How readable?", criteria: ["low", "high"] },
+        leak: { type: "boolean", instructions: "Does it leak?" },
+      },
+      "q.json",
+      new Set(),
+    );
+    expect(out.map((q) => `${q.id}:${q.kind}`)).toEqual(["read:score", "leak:boolean"]);
+  });
+
+  it("rejects duplicate ids across sources", () => {
+    expect(() =>
+      parseQuestionsText(
+        { read: { type: "score", instructions: "x", criteria: ["a", "b"] } },
+        "q.json",
+        new Set(["read"]),
+      ),
+    ).toThrow("duplicate question id");
+  });
+
+  it("rejects invalid schemas and thin criteria", () => {
+    expect(() => parseQuestionsText({ nope: 42 }, "q.json", new Set())).toThrow(
+      "invalid questions file",
+    );
+    expect(() =>
+      parseQuestionsText(
+        { pick: { type: "choice", instructions: "x", criteria: {} } },
+        "q.json",
+        new Set(),
+      ),
+    ).toThrow("nonempty criteria map");
   });
 });

@@ -125,6 +125,12 @@ export async function parseFile(
   } catch (error) {
     throw rangerError("RANGERJEV_QUESTIONS_UNREADABLE", `cannot read questions file ${path}: ${(error as Error).message}`);
   }
+  return parseQuestionsText(raw, path, taken);
+}
+
+/** Pure half of parseFile: raw JSON in, typed questions out. Takes the raw
+ *  value (not text) so JSON syntax errors keep the read-site message. */
+export function parseQuestionsText(raw: unknown, path: string, taken: Set<string>): NamedQuestion[] {
   const parsed = fileSchema.safeParse(raw);
   if (!parsed.success) {
     throw rangerError("RANGERJEV_QUESTIONS_INVALID", `invalid questions file ${path}: ${parsed.error.issues[0]?.message ?? "schema error"}`);
