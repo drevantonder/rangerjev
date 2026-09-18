@@ -127,8 +127,9 @@ export default defineUnitFinder("effects", (file, { program }) => {
 --help                 show help
 ```
 
-Auth: `TYPESAFE_API_KEY` in the environment. Model override:
-`RANGERJEV_MODEL` (default `jev-1.13.0`). Endpoint override:
+Auth: `TYPESAFE_API_KEY` in the environment (the same global key jevlint
+uses via its SDK fallback). Failing that, the CLI exits 1 before any request.
+Model override: `RANGERJEV_MODEL` (default `jev-1.13.0`). Endpoint override:
 `TYPESAFE_BASE_URL`.
 
 ## Roadmap

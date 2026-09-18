@@ -23,19 +23,32 @@ function toNumber(value: unknown): number {
 
 export type AskState = { [key: string]: JsonValue };
 
+export const MISSING_API_KEY_MESSAGE =
+  "no Typesafe API key found. Set TYPESAFE_API_KEY in the environment.";
+
+export function resolveApiKey(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const raw = env["TYPESAFE_API_KEY"];
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 export class RangerEvaluator {
   readonly model: string;
   private readonly endpoint: string;
+  private readonly apiKey: string | undefined;
   private client: TypeSafeClient | undefined;
 
-  constructor() {
+  constructor(apiKey?: string) {
     this.endpoint = process.env.TYPESAFE_BASE_URL?.trim() || "https://api.typesafe.ai";
     this.model = process.env.RANGERJEV_MODEL?.trim() || DEFAULT_MODEL;
+    this.apiKey = apiKey ?? resolveApiKey();
   }
 
   async ask(state: AskState, questions: Questions): Promise<BatchResult> {
     const client = (this.client ??= new TypeSafeClient({
       baseURL: this.endpoint,
+      apiKey: this.apiKey,
       defaultModel: this.model,
     }));
     const response = await client.systemOne({ state, questions, model: this.model });

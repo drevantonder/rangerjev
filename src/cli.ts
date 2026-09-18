@@ -3,7 +3,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { RangerEvaluator } from "./evaluator.js";
+import { MISSING_API_KEY_MESSAGE, RangerEvaluator, resolveApiKey } from "./evaluator.js";
 import { parseFile, parseInline } from "./questions.js";
 import type { InlineQuestions } from "./questions.js";
 import { ask } from "./run.js";
@@ -243,9 +243,12 @@ export async function runCli(
     return 0;
   }
 
+  const apiKey = resolveApiKey();
+  if (apiKey === undefined) return fail(stderr, MISSING_API_KEY_MESSAGE);
+
   let report: Report;
   try {
-    report = await ask({ units, questions, context, evaluator: new RangerEvaluator() });
+    report = await ask({ units, questions, context, evaluator: new RangerEvaluator(apiKey) });
   } catch (error) {
     return fail(stderr, error instanceof Error ? error.message : String(error));
   }
