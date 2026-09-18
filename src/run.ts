@@ -433,6 +433,7 @@ export async function ask(input: AskInput): Promise<Report> {
       unitsAsked: input.dryRun ? 0 : units.length,
       questionsAsked,
       unanswered,
+      skipped: [],
       complete: unanswered.length === 0,
     },
   };
