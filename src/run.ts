@@ -261,7 +261,7 @@ function summarize(
         }
       });
       summary[question.id] = { type: "choice", n, counts };
-    } else {
+    } else if (question.kind === "score") {
       let sum = 0;
       let n = 0;
       let min = Number.POSITIVE_INFINITY;
@@ -286,6 +286,11 @@ function summarize(
         max: n > 0 ? max : 0,
         lowest: scored.slice(0, LOWEST_LIMIT).map(({ unitIndex }) => units[unitIndex]?.id ?? ""),
       };
+    } else {
+      // A fourth question kind must add its own arm above: the compiler
+      // rejects anything but never here.
+      const exhaustive: never = question.kind;
+      throw new Error(`unknown question kind: ${String(exhaustive)}`);
     }
   }
   return summary;
