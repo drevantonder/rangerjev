@@ -261,6 +261,14 @@ describe("splitCustom", () => {
       ),
     ).rejects.toThrow("no path");
   });
+
+  it("accepts a span over an empty file", async () => {
+    const out = await splitCustom([{ path: "a.ts", source: "" }], () => [
+      { span: { start: 0, end: 0 } },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.source).toBe("");
+  });
 });
 
 describe("reachableFiles", () => {

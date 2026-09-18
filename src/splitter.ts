@@ -429,11 +429,11 @@ export async function splitCustom(files: ProjectFile[], finder: UnitFinder): Pro
       );
     }
     const path = fallbackPath;
-    const owner = byPath.get(path) ?? "";
+    const owner = byPath.get(path);
     const span = parsed.span;
     let source = parsed.source;
     let unitSpan: UnitSpan;
-    if (span !== undefined && owner !== "") {
+    if (span !== undefined && owner !== undefined) {
       const start = Math.max(0, Math.min(span.start, owner.length));
       const end = Math.max(start, Math.min(span.end, owner.length));
       source ??= owner.slice(start, end);
@@ -450,7 +450,7 @@ export async function splitCustom(files: ProjectFile[], finder: UnitFinder): Pro
       }
     } else if (source !== undefined) {
       unitSpan = { start: 0, end: source.length, startLine: 1, endLine: lineCount(source) };
-    } else if (owner !== "") {
+    } else if (owner !== undefined) {
       source = owner;
       unitSpan = { start: 0, end: owner.length, startLine: 1, endLine: lineCount(owner) };
     } else {
