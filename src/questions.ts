@@ -109,6 +109,9 @@ export function parseInline(inline: InlineQuestions): NamedQuestion[] {
   return out;
 }
 
+/** Parse named questions from a JSON file. Adds every parsed id to `taken`
+ *  (shared with the inline flags) and throws naming any duplicate, so ids
+ *  stay unique across both question sources. */
 export async function parseFile(
   cwd: string,
   path: string,
