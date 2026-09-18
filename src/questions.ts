@@ -50,6 +50,9 @@ function splitList(raw: string, flag: string): { id: string; items: string[] } {
   return { id, items };
 }
 
+/** Build typed questions from inline CLI flags. Every mismatch throws naming
+ *  the flag: duplicate ids, a --choice without --choices, a --score without
+ *  --levels (or fewer than two levels), and orphaned --choices/--levels. */
 export function parseInline(inline: InlineQuestions): NamedQuestion[] {
   const out: NamedQuestion[] = [];
   const seen = new Set<string>();
