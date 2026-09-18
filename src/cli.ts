@@ -35,6 +35,8 @@ Ask typed questions of a codebase. Units in, probabilities out.
   --max-units <n>        ask only the first n units in path order
   --format <f>           json (default) or text
   --dry-run              enumerate units and count questions, zero live requests
+  --no-cache             skip the response cache (on by default)
+  --cache-dir <path>     cache directory (default: $XDG_CACHE_HOME/rangerjev)
   --help                 show this help
 
 Stdout carries only the report JSON (or text with --format text). All chatter
@@ -45,6 +47,8 @@ input, a provider failure, or unanswered questions.
 interface Options {
   paths: string[];
   showHelp: boolean;
+  noCache: boolean;
+  cacheDir?: string;
   by: SplitterKind;
   entry?: string;
   depth: number;
@@ -76,6 +80,7 @@ function parseArgs(args: string[]): Options {
   const options: Options = {
     paths: [],
     showHelp: false,
+    noCache: false,
     by: "file",
     depth: 3,
     inline: { booleans: [], choices: [], choicesFor: [], scores: [], levelsFor: [] },
@@ -124,6 +129,8 @@ function parseArgs(args: string[]): Options {
       }
       options.format = value;
     } else if (arg === "--dry-run") options.dryRun = true;
+    else if (arg === "--no-cache") options.noCache = true;
+    else if (arg === "--cache-dir") options.cacheDir = next();
     else if (arg === "--") {
       options.paths.push(...args.slice(index + 1));
       break;
@@ -254,12 +261,23 @@ export async function runCli(
 
   let report: Report;
   try {
-    report = await ask({ units, questions, context, evaluator: new RangerEvaluator(apiKey) });
+    const evaluator = new RangerEvaluator(apiKey);
+    report = await ask({
+      units,
+      questions,
+      context,
+      evaluator,
+      model: evaluator.model,
+      cache: { enabled: !options.noCache, dir: options.cacheDir },
+    });
   } catch (error) {
     return fail(stderr, error instanceof Error ? error.message : String(error));
   }
 
   stdout(`${options.format === "json" ? JSON.stringify(report, null, 2) : formatText(report)}\n`);
+  if (report.cache.enabled) {
+    stderr(`rangerjev: cache ${report.cache.hits} hits, ${report.cache.misses} misses\n`);
+  }
   for (const item of report.coverage.unanswered.slice(0, 10)) {
     stderr(`rangerjev: unanswered ${item.unitId} ${item.questionId}: ${item.message}\n`);
   }

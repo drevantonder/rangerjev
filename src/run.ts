@@ -1,5 +1,7 @@
 import type { EntryType, JsonValue, Question, Questions } from "@typesafe-ai/sdk";
 import type { BatchAnswer, RangerEvaluator } from "./evaluator.js";
+import { DEFAULT_MODEL } from "./evaluator.js";
+import { cacheKey, defaultCacheDir, readCachedAnswer, writeCachedAnswer } from "./cache.js";
 import type {
   NamedQuestion,
   Report,
@@ -27,6 +29,10 @@ export interface AskInput {
   context?: string;
   dryRun?: boolean;
   evaluator?: Pick<RangerEvaluator, "ask">;
+  /** Model answering (cache key scope). Defaults to the evaluator default. */
+  model?: string;
+  /** Response cache. Enabled only when set; the CLI enables it by default. */
+  cache?: { enabled: boolean; dir?: string };
 }
 
 function stateFor(units: Unit[], context?: string): { [key: string]: JsonValue } {
@@ -42,7 +48,7 @@ function stateFor(units: Unit[], context?: string): { [key: string]: JsonValue }
   return state;
 }
 
-function plannedQuestions(units: Unit[], questions: NamedQuestion[]): PlannedQuestion[] {
+export function plannedQuestions(units: Unit[], questions: NamedQuestion[]): PlannedQuestion[] {
   const planned: PlannedQuestion[] = [];
   units.forEach((_unit, unitIndex) => {
     for (const question of questions) {
@@ -65,17 +71,11 @@ function questionPayload(unitIndex: number, question: NamedQuestion): Question {
   return { ...question.question, instructions };
 }
 
-export function planBatches(
-  units: Unit[],
-  questions: NamedQuestion[],
-  context?: string,
-): PlannedQuestion[][] {
-  const state = stateFor(units, context);
-  const baseSize = JSON.stringify(state).length;
+function chunkItems(baseSize: number, items: PlannedQuestion[]): PlannedQuestion[][] {
   const batches: PlannedQuestion[][] = [];
   let current: PlannedQuestion[] = [];
   let currentSize = baseSize;
-  for (const item of plannedQuestions(units, questions)) {
+  for (const item of items) {
     const entrySize = JSON.stringify({
       [item.key]: questionPayload(item.unitIndex, item.question),
     }).length;
@@ -93,6 +93,16 @@ export function planBatches(
   }
   if (current.length > 0) batches.push(current);
   return batches;
+}
+
+export function planBatches(
+  units: Unit[],
+  questions: NamedQuestion[],
+  context?: string,
+): PlannedQuestion[][] {
+  const state = stateFor(units, context);
+  const baseSize = JSON.stringify(state).length;
+  return chunkItems(baseSize, plannedQuestions(units, questions));
 }
 
 function isTokenLimit(message: string): boolean {
@@ -253,13 +263,54 @@ export async function ask(input: AskInput): Promise<Report> {
   const unanswered: Unanswered[] = [];
   const usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
   const state = stateFor(units, input.context);
-  const batches = planBatches(units, questions, input.context);
+  const cacheDir =
+    !input.dryRun && input.cache?.enabled === true
+      ? (input.cache.dir ?? defaultCacheDir())
+      : undefined;
+  const model = input.model ?? DEFAULT_MODEL;
+
+  let cacheHits = 0;
+  let pending = plannedQuestions(units, questions);
+  if (cacheDir !== undefined) {
+    const misses: PlannedQuestion[] = [];
+    for (const item of pending) {
+      const unit = units[item.unitIndex];
+      const hit =
+        unit === undefined
+          ? undefined
+          : await readCachedAnswer(cacheDir, cacheKey(model, unit.source, item.question), item.question.kind);
+      if (hit === undefined) {
+        misses.push(item);
+        continue;
+      }
+      cacheHits += 1;
+      let byUnit = results.get(item.unitIndex);
+      if (!byUnit) {
+        byUnit = new Map();
+        results.set(item.unitIndex, byUnit);
+      }
+      byUnit.set(item.questionId, hit);
+    }
+    pending = misses;
+  }
+  const batches = chunkItems(JSON.stringify(state).length, pending);
 
   let questionsAsked = 0;
   if (!input.dryRun && input.evaluator) {
     for (const batch of batches) {
       questionsAsked += batch.length;
       await evaluateBatch(state, batch, input.evaluator, results, unanswered, units, usage);
+      if (cacheDir !== undefined) {
+        await Promise.all(
+          batch.map(async (item) => {
+            const answer = results.get(item.unitIndex)?.get(item.questionId);
+            const unit = units[item.unitIndex];
+            if (answer !== undefined && unit !== undefined) {
+              await writeCachedAnswer(cacheDir, cacheKey(model, unit.source, item.question), answer);
+            }
+          }),
+        );
+      }
     }
   }
 
@@ -275,6 +326,7 @@ export async function ask(input: AskInput): Promise<Report> {
     units: unitResults,
     summary: summarize(units, results, questions),
     usage,
+    cache: { enabled: cacheDir !== undefined, hits: cacheHits, misses: questionsAsked },
     coverage: {
       unitsEnumerated: units.length,
       unitsAsked: input.dryRun ? 0 : units.length,

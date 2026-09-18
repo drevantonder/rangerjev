@@ -76,6 +76,7 @@ input, a provider failure, or at least one unanswered question.
     "read": { "type": "score", "n": 41, "mean": 2.1, "min": 0.3, "max": 3.0, "lowest": ["src/db.ts#file"] }
   },
   "usage": { "inputTokens": 12000, "outputTokens": 0, "totalTokens": 12000 },
+  "cache": { "enabled": true, "hits": 30, "misses": 11 },
   "coverage": { "unitsEnumerated": 41, "unitsAsked": 41, "questionsAsked": 41, "complete": true }
 }
 ```
@@ -124,6 +125,8 @@ export default defineUnitFinder("effects", (file, { program }) => {
 --max-units <n>        ask only the first n units in path order
 --format <f>           json (default) or text
 --dry-run              enumerate units and count questions, zero live requests
+--no-cache             skip the response cache (on by default)
+--cache-dir <path>     cache directory (default: $XDG_CACHE_HOME/rangerjev)
 --help                 show help
 ```
 
@@ -135,5 +138,12 @@ Model override: `RANGERJEV_MODEL` (default `jev-1.13.0`). Endpoint override:
 ## Roadmap
 
 - `--by` presets beyond file/function/call-tree (e.g. tests-only, changed-files)
-- Response cache (content-addressed, opt-out)
 - Confidence-gated escalation lists for low-confidence units
+
+## Cache
+
+Answers are cached content-addressed under `$XDG_CACHE_HOME/rangerjev`
+(fallback `~/.cache/rangerjev`), keyed by model + unit source + question.
+Repeat runs only spend credits on changed code; `--no-cache` opts out and
+`--cache-dir` overrides the location. The report's `cache` field shows hits
+and misses, and hit/miss counts also go to stderr.

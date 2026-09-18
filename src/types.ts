@@ -101,6 +101,7 @@ export interface Report {
   units: UnitResult[];
   summary: ReportSummary;
   usage: { inputTokens: number; outputTokens: number; totalTokens: number };
+  cache: { enabled: boolean; hits: number; misses: number };
   coverage: {
     unitsEnumerated: number;
     unitsAsked: number;

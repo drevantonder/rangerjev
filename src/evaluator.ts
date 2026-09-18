@@ -3,6 +3,8 @@ import type { JsonValue, Questions } from "@typesafe-ai/sdk";
 
 const DEFAULT_MODEL = "jev-1.13.0";
 
+export { DEFAULT_MODEL };
+
 export interface BatchAnswer {
   type: string;
   noul?: unknown;
