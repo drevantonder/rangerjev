@@ -81,6 +81,9 @@ function fail(stderr: (text: string) => void, message: string): number {
   return 1;
 }
 
+/** How many unanswered items get their own stderr line before summarizing. */
+const MAX_UNANSWERED_SHOWN = 10;
+
 function parseCount(raw: string | undefined, flag: string, min: number): number | undefined {
   if (raw === undefined) return undefined;
   const parsed = Number(raw);
@@ -336,11 +339,11 @@ export async function runCli(
   if (report.cache.enabled) {
     stderr(`rangerjev: cache ${report.cache.hits} hits, ${report.cache.misses} misses\n`);
   }
-  for (const item of report.coverage.unanswered.slice(0, 10)) {
+  for (const item of report.coverage.unanswered.slice(0, MAX_UNANSWERED_SHOWN)) {
     stderr(`rangerjev: unanswered ${item.unitId} ${item.questionId}: ${item.message}\n`);
   }
-  if (report.coverage.unanswered.length > 10) {
-    stderr(`rangerjev: ${report.coverage.unanswered.length - 10} more unanswered omitted\n`);
+  if (report.coverage.unanswered.length > MAX_UNANSWERED_SHOWN) {
+    stderr(`rangerjev: ${report.coverage.unanswered.length - MAX_UNANSWERED_SHOWN} more unanswered omitted\n`);
   }
   return report.coverage.complete ? 0 : 1;
 }
