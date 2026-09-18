@@ -50,4 +50,5 @@ decides pass/fail. It reports probabilities that agents and humans compose.
 - `--ext <.a,.b>` adds file extensions beyond JS/TS.
 - Chatter, dry-run counts, and failure notes go to stderr; stdout carries
   only the report. Invalid input, provider failure, or unanswered questions
-  exit 1.
+  exit 1. Unreadable paths stream to stderr with their reason and land in
+  `coverage.skipped` (which flips `complete` to false).

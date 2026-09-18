@@ -49,7 +49,7 @@ Ask typed questions of a codebase.
 
 Stdout carries only the report JSON. All chatter
 goes to stderr. Exit 0 means every unit was answered; exit 1 means invalid
-input, a provider failure, or unanswered questions.
+input, a provider failure, unanswered questions, or skipped paths.
 `;
 
 interface Options {
@@ -208,12 +208,16 @@ export async function runCli(
     return fail(stderr, "no questions: pass --questions or an inline --boolean/--choice/--score");
   }
 
-  let files;
+  let collected;
   try {
-    files = await collectFiles(cwd, options.paths, options.extraExts);
+    collected = await collectFiles(cwd, options.paths, options.extraExts, (entry) =>
+      stderr(`rangerjev: skipped unreadable path: ${entry.path} (${entry.reason})\n`),
+    );
   } catch (error) {
     return fail(stderr, error instanceof Error ? error.message : String(error));
   }
+  let files = collected.files;
+  const skipped = collected.skipped;
   if (files.length === 0) {
     return fail(stderr, "no source files matched the given paths");
   }
@@ -265,8 +269,14 @@ export async function runCli(
       `rangerjev: dry run: ${units.length} units x ${questions.length} questions = ${planned} planned questions, 0 live requests\n`,
     );
     const report = await ask({ units, questions, context, dryRun: true });
+    if (skipped.length > 0) {
+      report.coverage.skipped = skipped;
+      report.coverage.complete = false;
+      const names = skipped.slice(0, 5).map((entry) => entry.path).join(", ");
+      stderr(`rangerjev: ${skipped.length} unreadable path(s) excluded: ${names}${skipped.length > 5 ? ", ..." : ""}\n`);
+    }
     stdout(`${JSON.stringify(report, null, 2)}\n`);
-    return 0;
+    return report.coverage.complete ? 0 : 1;
   }
 
   const apiKey = resolveApiKey();
@@ -291,6 +301,12 @@ export async function runCli(
   stdout(`${JSON.stringify(report, null, 2)}\n`);
   if (report.cache.enabled) {
     stderr(`rangerjev: cache ${report.cache.hits} hits, ${report.cache.misses} misses\n`);
+  }
+  if (skipped.length > 0) {
+    report.coverage.skipped = skipped;
+    report.coverage.complete = false;
+    const names = skipped.slice(0, 5).map((entry) => entry.path).join(", ");
+    stderr(`rangerjev: ${skipped.length} unreadable path(s) excluded: ${names}${skipped.length > 5 ? ", ..." : ""}\n`);
   }
   return report.coverage.complete ? 0 : 1;
 }

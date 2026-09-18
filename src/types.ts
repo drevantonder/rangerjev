@@ -24,6 +24,12 @@ export interface ProjectFile {
   source: string;
 }
 
+export interface SkippedPath {
+  path: string;
+  /** OS error code behind the skip (EACCES, EPERM, ...). */
+  reason: string;
+}
+
 /** A parsed program handed to custom splitters (re-exported oxc shapes). */
 export interface ParseContext {
   program: unknown;
@@ -118,6 +124,8 @@ export interface Report {
     unitsAsked: number;
     questionsAsked: number;
     unanswered: Unanswered[];
+    /** Present but unreadable paths excluded from the scope. */
+    skipped: SkippedPath[];
     complete: boolean;
   };
   truncatedContext?: boolean;

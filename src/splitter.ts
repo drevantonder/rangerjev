@@ -8,6 +8,7 @@ import { createJiti } from "jiti";
 import { z } from "zod";
 import type {
   ProjectFile,
+  SkippedPath,
   SplitterFile,
   SplitterKind,
   SplitterUnit,
@@ -70,46 +71,83 @@ function toPosix(cwd: string, absolute: string): string {
   return relative(cwd, absolute).split(sep).join("/");
 }
 
-async function walk(absolute: string, cwd: string, extensions: Set<string>): Promise<string[]> {
+export interface WalkResult {
+  files: string[];
+  /** Present but unreadable entries: named so partial scopes stay visible. */
+  skipped: SkippedPath[];
+}
+
+/** Error codes where there is nothing to report: vanished, wrong shape, loops. */
+function isAbsence(error: unknown): boolean {
+  const code = (error as { code?: unknown }).code;
+  return code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP";
+}
+
+function skipReason(error: unknown): string {
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && code !== "" ? code : "unknown error";
+}
+
+async function walk(
+  absolute: string,
+  cwd: string,
+  extensions: Set<string>,
+  onSkipped: (skipped: SkippedPath) => void,
+): Promise<WalkResult> {
+  const skip = (error: unknown): WalkResult => {
+    if (isAbsence(error)) return { files: [], skipped: [] };
+    const entry: SkippedPath = { path: toPosix(cwd, absolute), reason: skipReason(error) };
+    onSkipped(entry);
+    return { files: [], skipped: [entry] };
+  };
   // lstat: never follow symlinks (avoids cycles and dangling targets), and
   // skip entries that vanish mid-walk (sockets, lock files, removed files).
   let info;
   try {
     info = await lstat(absolute);
-  } catch {
-    return [];
+  } catch (error) {
+    return skip(error);
   }
   if (info.isDirectory()) {
-    if (SKIPPED_DIRS.has(absolute.split(sep).pop() ?? "")) return [];
+    if (SKIPPED_DIRS.has(absolute.split(sep).pop() ?? "")) return { files: [], skipped: [] };
     let entries: string[];
     try {
       entries = await readdir(absolute);
-    } catch {
-      return [];
+    } catch (error) {
+      return skip(error);
     }
-    const out: string[] = [];
+    const out: WalkResult = { files: [], skipped: [] };
     for (const entry of entries) {
-      out.push(...(await walk(join(absolute, entry), cwd, extensions)));
+      const child = await walk(join(absolute, entry), cwd, extensions, onSkipped);
+      out.files.push(...child.files);
+      out.skipped.push(...child.skipped);
     }
     return out;
   }
   if (info.isFile() && extensions.has(extname(absolute).toLowerCase())) {
-    return [toPosix(cwd, absolute)];
+    return { files: [toPosix(cwd, absolute)], skipped: [] };
   }
-  return [];
+  return { files: [], skipped: [] };
 }
 
 export async function collectFiles(
   cwd: string,
   patterns: string[],
   extraExtensions: string[],
-): Promise<ProjectFile[]> {
+  onSkipped: (skipped: SkippedPath) => void = () => undefined,
+): Promise<{ files: ProjectFile[]; skipped: SkippedPath[] }> {
   const extensions = new Set([
     ...DEFAULT_EXTENSIONS,
     ...extraExtensions.map((ext) => (ext.startsWith(".") ? ext : `.${ext}`).toLowerCase()),
   ]);
   const roots = patterns.length > 0 ? patterns : ["."];
   const found = new Set<string>();
+  const skipped = new Map<string, SkippedPath>();
+  const noteSkipped = (entry: SkippedPath): void => {
+    if (skipped.has(entry.path)) return;
+    skipped.set(entry.path, entry);
+    onSkipped(entry);
+  };
   for (const pattern of roots) {
     const absolute = resolve(cwd, pattern);
     try {
@@ -117,15 +155,16 @@ export async function collectFiles(
     } catch {
       throw new Error(`no such file or directory: ${pattern}`);
     }
-    const bucket: string[] = await walk(absolute, cwd, extensions);
-    for (const path of bucket) found.add(path);
+    const bucket = await walk(absolute, cwd, extensions, noteSkipped);
+    for (const path of bucket.files) found.add(path);
+    for (const entry of bucket.skipped) skipped.set(entry.path, entry);
   }
   const sorted = [...found].sort();
   const files: ProjectFile[] = [];
   for (const path of sorted) {
     files.push({ path, source: await readFile(resolve(cwd, path), "utf8") });
   }
-  return files;
+  return { files, skipped: [...skipped.values()].sort((a, b) => a.path.localeCompare(b.path)) };
 }
 
 const execFileAsync = promisify(execFile);

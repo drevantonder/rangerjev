@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, chmodSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -84,13 +84,67 @@ describe("collectFiles", () => {
       // Windows without Developer Mode forbids symlinks; the walker only
       // needs the real file below to prove the point.
     }
-    const files = await collectFiles(dir, ["."], []);
+    const { files } = await collectFiles(dir, ["."], []);
     expect(files.map((file) => file.path).sort()).toEqual(["sub/real.ts"]);
   });
 
   it("still reports a missing root path", async () => {
     const dir = mkdtempSync(join(tmpdir(), "rangerjev-walk-"));
     await expect(collectFiles(dir, ["gone"], [])).rejects.toThrow("no such file or directory: gone");
+  });
+
+  it("names unreadable entries as skipped instead of hiding them", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rangerjev-walk-"));
+    mkdirSync(join(dir, "locked"));
+    writeFileSync(join(dir, "locked", "a.ts"), "export const a = 1;\n");
+    writeFileSync(join(dir, "open.ts"), "export const o = 1;\n");
+    chmodSync(join(dir, "locked"), 0o000);
+    let blocked: boolean;
+    try {
+      readdirSync(join(dir, "locked"));
+      blocked = false;
+    } catch {
+      blocked = true;
+    } finally {
+      chmodSync(join(dir, "locked"), 0o755);
+    }
+    if (!blocked) return; // platform ignores permission bits; nothing to prove
+    chmodSync(join(dir, "locked"), 0o000);
+    try {
+      const { files, skipped } = await collectFiles(dir, ["."], []);
+      expect(files.map((file) => file.path)).toEqual(["open.ts"]);
+      expect(skipped.map((entry) => entry.path)).toEqual(["locked"]);
+      expect(skipped[0]?.reason).toMatch(/EACCES|EPERM/);
+    } finally {
+      chmodSync(join(dir, "locked"), 0o755);
+    }
+  });
+
+  it("streams skip reasons as they happen", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rangerjev-walk-"));
+    mkdirSync(join(dir, "locked"));
+    writeFileSync(join(dir, "locked", "a.ts"), "export const a = 1;\n");
+    chmodSync(join(dir, "locked"), 0o000);
+    let blocked: boolean;
+    try {
+      readdirSync(join(dir, "locked"));
+      blocked = false;
+    } catch {
+      blocked = true;
+    } finally {
+      chmodSync(join(dir, "locked"), 0o755);
+    }
+    if (!blocked) return;
+    chmodSync(join(dir, "locked"), 0o000);
+    const streamed: { path: string; reason: string }[] = [];
+    try {
+      await collectFiles(dir, ["."], [], (entry) => streamed.push(entry));
+    } finally {
+      chmodSync(join(dir, "locked"), 0o755);
+    }
+    expect(streamed).toHaveLength(1);
+    expect(streamed[0]?.path).toBe("locked");
+    expect(streamed[0]?.reason).toMatch(/EACCES|EPERM/);
   });
 });
 

@@ -113,9 +113,13 @@ input, a provider failure, or at least one unanswered question.
   },
   "usage": { "inputTokens": 12000, "outputTokens": 0, "totalTokens": 12000 },
   "cache": { "enabled": true, "hits": 30, "misses": 11 },
-  "coverage": { "unitsEnumerated": 41, "unitsAsked": 41, "questionsAsked": 41, "complete": true }
+  "coverage": { "unitsEnumerated": 41, "unitsAsked": 41, "questionsAsked": 41, "complete": true, "skipped": [] }
 }
 ```
+
+Unreadable paths stream to stderr with their reason (`EACCES`, ...) as the
+walk hits them, land in `coverage.skipped`, and flip `complete` to false.
+Partial scopes stay visible instead of silent.
 
 ## Custom splitters
 
