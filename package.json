@@ -1,0 +1,41 @@
+{
+  "name": "rangerjev",
+  "version": "0.1.0",
+  "description": "Ask typed questions of a codebase. Units in, probabilities out.",
+  "type": "module",
+  "bin": {
+    "rangerjev": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./oxc": {
+      "types": "./dist/oxc.d.ts",
+      "import": "./dist/oxc.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc --noEmit && vitest run",
+    "test": "vitest run",
+    "rangerjev": "node dist/cli.js"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "^0.6.0",
+    "jiti": "^2.6.1",
+    "oxc-parser": "^0.150.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "packageManager": "pnpm@11.3.0"
+}
