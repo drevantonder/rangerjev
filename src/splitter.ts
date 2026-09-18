@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { parseSync, Visitor } from "oxc-parser";
 import { createJiti } from "jiti";
 import { z } from "zod";
+import { rangerError } from "./errors.js";
 import type {
   ProjectFile,
   SkippedPath,
@@ -153,7 +154,7 @@ export async function collectFiles(
     try {
       await lstat(absolute);
     } catch {
-      throw new Error(`no such file or directory: ${pattern}`);
+      throw rangerError("RANGERJEV_NO_SUCH_PATH", `no such file or directory: ${pattern}`);
     }
     const bucket = await walk(absolute, cwd, extensions, noteSkipped);
     for (const path of bucket.files) found.add(path);
@@ -211,7 +212,7 @@ export async function gitChangedPaths(cwd: string, base?: string): Promise<strin
       return stdout;
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      throw new Error(`git ${args[0]} failed: ${detail.replaceAll(/\s+/g, " ").trim().slice(0, 200)}`);
+      throw rangerError("RANGERJEV_GIT_FAILED", `git ${args[0]} failed: ${detail.replaceAll(/\s+/g, " ").trim().slice(0, 200)}`);
     }
   };
   const toplevel = (await run(["rev-parse", "--show-toplevel"])).trim();
@@ -311,7 +312,7 @@ export function reachableFiles(files: ProjectFile[], entry: string, depth: numbe
   const byPath = new Map(files.map((file) => [file.path, file]));
   const normalizedEntry = entry.replace(/\\/g, "/").replace(/^\.\//, "");
   if (!byPath.has(normalizedEntry)) {
-    throw new Error(`entry not in scope: ${entry}`);
+    throw rangerError("RANGERJEV_ENTRY_OUT_OF_SCOPE", `entry not in scope: ${entry}`);
   }
   const seen = new Set<string>([normalizedEntry]);
   let frontier = [normalizedEntry];
@@ -359,7 +360,7 @@ export async function splitBy(
 ): Promise<Unit[]> {
   if (kind === "file") return splitFileUnits(files);
   if (kind === "function") return splitFunctionUnits(files);
-  if (options.entry === undefined) throw new Error("--by call-tree requires --entry <path>");
+  if (options.entry === undefined) throw rangerError("RANGERJEV_ENTRY_REQUIRED", "--by call-tree requires --entry <path>");
   const depth = options.depth ?? 3;
   return splitFileUnits(reachableFiles(files, options.entry, depth));
 }
@@ -409,7 +410,7 @@ export async function loadUnitFinder(cwd: string, finderPath: string): Promise<U
         ? (candidate as { find: UnitFinder }).find
         : undefined;
   if (typeof fn !== "function") {
-    throw new Error(`unit finder ${finderPath} must default-export a function or { find }`);
+    throw rangerError("RANGERJEV_BAD_FINDER", `unit finder ${finderPath} must default-export a function or { find }`);
   }
   return fn as UnitFinder;
 }
@@ -423,7 +424,8 @@ export async function splitCustom(files: ProjectFile[], finder: UnitFinder): Pro
     const parsed = splitterUnitSchema.parse(item) as SplitterUnit;
     const fallbackPath = parsed.path ?? (files.length === 1 ? files[0]?.path : undefined);
     if (fallbackPath === undefined) {
-      throw new Error(
+      throw rangerError(
+        "RANGERJEV_FINDER_NO_PATH",
         `unit finder returned a unit with no path (index ${index}); ` +
           "set path per unit when splitting multiple files",
       );
@@ -454,7 +456,7 @@ export async function splitCustom(files: ProjectFile[], finder: UnitFinder): Pro
       source = owner;
       unitSpan = { start: 0, end: owner.length, startLine: 1, endLine: lineCount(owner) };
     } else {
-      throw new Error(`unit finder returned a unit with no path or source (index ${index})`);
+      throw rangerError("RANGERJEV_FINDER_NO_SOURCE", `unit finder returned a unit with no path or source (index ${index})`);
     }
     units.push({ id: parsed.id ?? `${path}#custom${index}`, path, source, span: unitSpan });
   });

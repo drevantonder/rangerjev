@@ -1,4 +1,5 @@
 import type { EntryType, JsonValue, Question, Questions } from "@typesafe-ai/sdk";
+import { rangerError } from "./errors.js";
 import type { BatchAnswer, RangerEvaluator } from "./evaluator.js";
 import { DEFAULT_MODEL } from "./evaluator.js";
 import { cacheKey, defaultCacheDir, readCachedAnswer, writeCachedAnswer } from "./cache.js";
@@ -290,7 +291,7 @@ function summarize(
       // A fourth question kind must add its own arm above: the compiler
       // rejects anything but never here.
       const exhaustive: never = question.kind;
-      throw new Error(`unknown question kind: ${String(exhaustive)}`);
+      throw rangerError("RANGERJEV_UNKNOWN_KIND", `unknown question kind: ${String(exhaustive)}`);
     }
   }
   return summary;

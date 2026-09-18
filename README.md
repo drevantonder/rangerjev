@@ -176,6 +176,12 @@ before any request.
 Model override: `RANGERJEV_MODEL` (default `jev-1.13.0`). Endpoint override:
 `TYPESAFE_BASE_URL`.
 
+## Error codes
+
+Every failure carries a code in brackets ahead of the text
+(`[RANGERJEV_NO_QUESTIONS] no questions: ...`), so agents match on the code
+while humans read the sentence. Text after the bracket stays stable.
+
 ## Presets and escalation
 
 `--tests-only` narrows any scope to test files; `--changed` narrows to files

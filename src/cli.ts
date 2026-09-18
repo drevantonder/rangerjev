@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { rangerError } from "./errors.js";
 import { MISSING_API_KEY_MESSAGE, RangerEvaluator, resolveApiKey } from "./evaluator.js";
 import { parseFile, parseInline } from "./questions.js";
 import type { InlineQuestions } from "./questions.js";
@@ -83,7 +84,7 @@ function parseCount(raw: string | undefined, flag: string, min: number): number 
   if (raw === undefined) return undefined;
   const parsed = Number(raw);
   if (!Number.isSafeInteger(parsed) || parsed < min) {
-    throw new Error(`${flag} must be an integer >= ${min}, got: ${raw}`);
+    throw rangerError("RANGERJEV_BAD_COUNT", `${flag} must be an integer >= ${min}, got: ${raw}`);
   }
   return parsed;
 }
@@ -106,7 +107,7 @@ function parseArgs(args: string[]): Options {
     const arg = args[index] ?? "";
     const next = (): string => {
       const value = args[index + 1];
-      if (value === undefined) throw new Error(`${arg} needs a value`);
+      if (value === undefined) throw rangerError("RANGERJEV_MISSING_VALUE", `${arg} needs a value`);
       index += 1;
       return value;
     };
@@ -117,7 +118,7 @@ function parseArgs(args: string[]): Options {
     } else if (arg === "--by") {
       const value = next();
       if (value !== "file" && value !== "function" && value !== "call-tree") {
-        throw new Error(`--by must be file, function, or call-tree, got: ${value}`);
+        throw rangerError("RANGERJEV_BAD_SPLITTER", `--by must be file, function, or call-tree, got: ${value}`);
       }
       options.by = value;
     } else if (arg === "--entry") options.entry = next();
@@ -137,7 +138,7 @@ function parseArgs(args: string[]): Options {
       const raw = next();
       const value = Number(raw);
       if (!Number.isFinite(value) || value < 0 || value > 1) {
-        throw new Error(`--escalate-below must be between 0 and 1, got: ${raw}`);
+        throw rangerError("RANGERJEV_BAD_THRESHOLD", `--escalate-below must be between 0 and 1, got: ${raw}`);
       }
       options.escalateBelow = value;
     }
@@ -156,7 +157,7 @@ function parseArgs(args: string[]): Options {
       options.paths.push(...args.slice(index + 1));
       break;
     } else if (arg.startsWith("-")) {
-      throw new Error(`unknown flag: ${arg}`);
+      throw rangerError("RANGERJEV_UNKNOWN_FLAG", `unknown flag: ${arg}`);
     } else {
       options.paths.push(arg);
     }
@@ -205,7 +206,7 @@ export async function runCli(
     return fail(stderr, error instanceof Error ? error.message : String(error));
   }
   if (questions.length === 0) {
-    return fail(stderr, "no questions: pass --questions or an inline --boolean/--choice/--score");
+    return fail(stderr, "[RANGERJEV_NO_QUESTIONS] no questions: pass --questions or an inline --boolean/--choice/--score");
   }
 
   let collected;
@@ -219,12 +220,12 @@ export async function runCli(
   let files = collected.files;
   const skipped = collected.skipped;
   if (files.length === 0) {
-    return fail(stderr, "no source files matched the given paths");
+    return fail(stderr, "[RANGERJEV_NO_FILES] no source files matched the given paths");
   }
   if (options.testsOnly) {
     files = filterTestFiles(files);
     if (files.length === 0) {
-      return fail(stderr, "--tests-only matched no test files in the given paths");
+      return fail(stderr, "[RANGERJEV_NO_TEST_FILES] --tests-only matched no test files in the given paths");
     }
   }
   if (options.changed || options.base !== undefined) {
@@ -236,7 +237,7 @@ export async function runCli(
     }
     files = filterToPaths(files, changed);
     if (files.length === 0) {
-      return fail(stderr, "--changed matched no collected files (nothing changed or scope excludes them)");
+      return fail(stderr, "[RANGERJEV_NO_CHANGED_FILES] --changed matched no collected files (nothing changed or scope excludes them)");
     }
   }
 
@@ -252,14 +253,14 @@ export async function runCli(
   }
   units.sort((a, b) => a.path.localeCompare(b.path) || a.id.localeCompare(b.id));
   if (options.maxUnits !== undefined) units = units.slice(0, options.maxUnits);
-  if (units.length === 0) return fail(stderr, "no units to ask about");
+  if (units.length === 0) return fail(stderr, "[RANGERJEV_NO_UNITS] no units to ask about");
 
   let context: string | undefined;
   if (options.contextPath !== undefined) {
     try {
       context = await readFile(resolve(cwd, options.contextPath), "utf8");
     } catch (error) {
-      return fail(stderr, `cannot read --context file: ${(error as Error).message}`);
+      return fail(stderr, `[RANGERJEV_BAD_CONTEXT] cannot read --context file: ${(error as Error).message}`);
     }
   }
 

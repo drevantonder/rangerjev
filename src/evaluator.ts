@@ -26,7 +26,7 @@ function toNumber(value: unknown): number {
 export type AskState = { [key: string]: JsonValue };
 
 export const MISSING_API_KEY_MESSAGE =
-  "no Typesafe API key found. Set TYPESAFE_API_KEY in the environment.";
+  "[RANGERJEV_NO_API_KEY] no Typesafe API key found. Set TYPESAFE_API_KEY in the environment.";
 
 export function resolveApiKey(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const raw = env["TYPESAFE_API_KEY"];
