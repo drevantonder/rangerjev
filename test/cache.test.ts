@@ -1,4 +1,5 @@
 import { mkdtempSync } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -74,6 +75,14 @@ describe("readCachedAnswer", () => {
     await writeCachedAnswer(dir, "bad-kind", { type: "score", score: 2 });
     expect(await readCachedAnswer(dir, "bad-kind", "boolean")).toBeUndefined();
     expect(await readCachedAnswer(dir, "bad-kind", "score")).toMatchObject({ score: 2 });
+  });
+
+  it("unlinks corrupt entries so later reads stop re-parsing garbage", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rangerjev-cache-"));
+    const path = join(dir, "corrupt.json");
+    await writeFile(path, "{not json");
+    expect(await readCachedAnswer(dir, "corrupt", "boolean")).toBeUndefined();
+    await expect(readFile(path, "utf8")).rejects.toThrow();
   });
 });
 

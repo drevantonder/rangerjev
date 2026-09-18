@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import envPaths from "env-paths";
 import type { NamedQuestion, UnitAnswer } from "./types.js";
@@ -34,9 +34,10 @@ export async function readCachedAnswer(
   key: string,
   kind: NamedQuestion["kind"],
 ): Promise<UnitAnswer | undefined> {
+  const path = keyPath(dir, key);
   let raw: string;
   try {
-    raw = await readFile(keyPath(dir, key), "utf8");
+    raw = await readFile(path, "utf8");
   } catch {
     return undefined;
   }
@@ -44,6 +45,9 @@ export async function readCachedAnswer(
     const parsed: unknown = JSON.parse(raw);
     return looksLikeAnswer(parsed, kind) ? parsed : undefined;
   } catch {
+    // Corrupt entry: drop it so later reads stop re-parsing garbage.
+    // Best-effort: a lost race just means someone else healed it first.
+    await unlink(path).catch(() => undefined);
     return undefined;
   }
 }
