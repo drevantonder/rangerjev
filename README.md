@@ -13,9 +13,10 @@ Requirements: Node.js 22+ and a `TYPESAFE_API_KEY` (dry runs need no key).
 `--changed` also needs git on `PATH`. Works on macOS, Linux, and Windows.
 
 ```sh
-npm install -g drevantonder/rangerjev   # one command, straight from GitHub
+# one command, straight from GitHub (npm 11+ needs --allow-git for git sources)
+npm install -g --allow-git root drevantonder/rangerjev
 # or run without installing:
-npx -y drevantonder/rangerjev --help
+npx -y --allow-git root drevantonder/rangerjev --help
 # or from source:
 git clone https://github.com/drevantonder/rangerjev.git && cd rangerjev \
   && npm install && npm run build && npm link
