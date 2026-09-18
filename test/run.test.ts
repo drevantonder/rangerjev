@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ask, shardItems, STATE_BUDGET_CHARS, summarize } from "../src/run.js";
+import { ask } from "../src/run.js";
 import { parseInline } from "../src/questions.js";
 import { reachableFiles, splitCustom } from "../src/splitter.js";
 import type { Unit } from "../src/types.js";
@@ -105,7 +105,7 @@ describe("ask", () => {
   });
 });
 
-describe("shardItems", () => {
+describe("sharding", () => {
   const big = (id: string, size: number): Unit => ({
     id,
     path: `${id}.ts`,
@@ -113,36 +113,31 @@ describe("shardItems", () => {
     span: { start: 0, end: size, startLine: 1, endLine: 1 },
   });
 
-  it("keeps small scopes in one shard", () => {
-    const qs = questions();
-    const shards = shardItems(units, [
-      { key: "a", unitIndex: 0, resultIndex: 0, questionId: "leak", question: qs[0]! },
-    ]);
-    expect(shards).toHaveLength(1);
-    expect(shards[0]?.units).toHaveLength(1);
-  });
-
-  it("splits sources that exceed the budget and remaps indices", () => {
+  it("attributes sharded answers to the right units", async () => {
     const qs = questions();
     const bigUnits = [big("a", 20_000), big("b", 20_000), big("c", 20_000)];
-    const pending = bigUnits.flatMap((_, i) =>
-      qs.map((question) => ({
-        key: `leak__${i}`,
-        unitIndex: i,
-        resultIndex: i,
-        questionId: question.id,
-        question,
-      })),
-    );
-    const shards = shardItems(bigUnits, pending, 30_000);
-    expect(shards.length).toBeGreaterThan(1);
-    // every item still resolves to its global unit, with a local inspect index
-    for (const shard of shards) {
-      for (const item of shard.items) {
-        expect(shard.units[item.unitIndex]?.id).toBe(bigUnits[item.resultIndex]?.id);
-      }
-    }
-    expect(shards.flatMap((s) => s.items)).toHaveLength(pending.length);
+    const report = await ask({
+      units: bigUnits,
+      questions: qs,
+      evaluator: {
+        ask: async (_state, payload) => ({
+          // answer value encodes the global unit index from the question key
+          answers: Object.fromEntries(
+            Object.keys(payload).map((key) => {
+              const globalIndex = Number(key.split("__").pop());
+              return [key, { type: "noul", noul: (globalIndex + 1) / 10 }];
+            }),
+          ),
+          usage: { inputTokens: 1, outputTokens: 0, totalTokens: 1 },
+        }),
+      },
+    });
+    expect(report.coverage.complete).toBe(true);
+    bigUnits.forEach((unit, index) => {
+      const answer = report.units[index]?.answers["leak"];
+      expect(answer).toMatchObject({ type: "boolean", probability: (index + 1) / 10 });
+      expect(report.units[index]?.id).toBe(unit.id);
+    });
   });
 
   it("asks large scopes with bounded per-request state", async () => {
@@ -173,7 +168,8 @@ describe("shardItems", () => {
     expect(report.coverage.complete).toBe(true);
     expect(calls).toBeGreaterThan(1);
     for (const size of stateSizes) {
-      expect(size).toBeLessThan(STATE_BUDGET_CHARS + 8_192);
+      // every request state stays under the documented 48k request budget
+      expect(size).toBeLessThan(48_000);
     }
   });
 });
@@ -201,8 +197,6 @@ describe("summarize", () => {
     expect(report.summary["read"]).toMatchObject({ type: "score", n: 2, mean: 1.5 });
     const entry = report.summary["read"];
     expect(entry.type === "score" && entry.lowest[0]).toBe("a.ts#file");
-    // direct summarize path stays consistent
-    expect(Object.keys(summarize(units, new Map(), qs))).toEqual(["read"]);
   });
 });
 

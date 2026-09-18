@@ -13,8 +13,8 @@ import type {
   UnitResult,
 } from "./types.js";
 
-export const REQUEST_BUDGET_CHARS = 48_000;
-export const MAX_QUESTIONS_PER_REQUEST = 24;
+const REQUEST_BUDGET_CHARS = 48_000;
+const MAX_QUESTIONS_PER_REQUEST = 24;
 const LOWEST_LIMIT = 5;
 
 interface PlannedQuestion {
@@ -54,7 +54,7 @@ function stateFor(units: Unit[], context?: string): { [key: string]: JsonValue }
   return state;
 }
 
-export function plannedQuestions(units: Unit[], questions: NamedQuestion[]): PlannedQuestion[] {
+function plannedQuestions(units: Unit[], questions: NamedQuestion[]): PlannedQuestion[] {
   const planned: PlannedQuestion[] = [];
   units.forEach((_unit, unitIndex) => {
     for (const question of questions) {
@@ -102,7 +102,7 @@ function chunkItems(baseSize: number, items: PlannedQuestion[]): PlannedQuestion
   return batches;
 }
 
-export function planBatches(
+function planBatches(
   units: Unit[],
   questions: NamedQuestion[],
   context?: string,
@@ -221,7 +221,7 @@ async function evaluateBatch(
   return outcome;
 }
 
-export function summarize(
+function summarize(
   units: Unit[],
   results: Map<number, Map<string, UnitAnswer>>,
   questions: NamedQuestion[],
@@ -283,7 +283,7 @@ export function summarize(
 }
 
 /** Headroom under REQUEST_BUDGET_CHARS so questions fit beside the state. */
-export const STATE_BUDGET_CHARS = 32_000;
+const STATE_BUDGET_CHARS = 32_000;
 
 interface Shard {
   units: Unit[];
@@ -293,7 +293,7 @@ interface Shard {
 /** Group pending items so each shard's unit sources fit the state budget.
  *  Item unitIndex values are remapped to the shard-local state; resultIndex
  *  keeps pointing at the global unit for answers and cache keys. */
-export function shardItems(
+function shardItems(
   units: Unit[],
   pending: PlannedQuestion[],
   budget: number = STATE_BUDGET_CHARS,

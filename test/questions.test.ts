@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planBatches } from "../src/run.js";
+import { ask } from "../src/run.js";
 import { parseInline } from "../src/questions.js";
 import type { Unit } from "../src/types.js";
 
@@ -37,8 +37,8 @@ describe("parseInline", () => {
   });
 });
 
-describe("planBatches", () => {
-  it("keeps small workloads in one batch", () => {
+describe("batching", () => {
+  it("answers small workloads in a single live request", async () => {
     const questions = parseInline({
       booleans: ["leak=Does this leak?"],
       choices: [],
@@ -46,8 +46,24 @@ describe("planBatches", () => {
       scores: [],
       levelsFor: [],
     });
-    const batches = planBatches(units, questions);
-    expect(batches).toHaveLength(1);
-    expect(batches[0]).toHaveLength(2);
+    let calls = 0;
+    const report = await ask({
+      units,
+      questions,
+      evaluator: {
+        ask: async (_state, payload) => {
+          calls += 1;
+          return {
+            answers: Object.fromEntries(
+              Object.keys(payload).map((key) => [key, { type: "noul", noul: 0.5 }]),
+            ),
+            usage: { inputTokens: 1, outputTokens: 0, totalTokens: 1 },
+          };
+        },
+      },
+    });
+    expect(calls).toBe(1);
+    expect(report.coverage.questionsAsked).toBe(2);
+    expect(report.coverage.complete).toBe(true);
   });
 });
