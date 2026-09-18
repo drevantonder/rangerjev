@@ -148,15 +148,22 @@ function checkAnswer(question: NamedQuestion, answer: BatchAnswer | undefined): 
   return out;
 }
 
+interface BatchOutcome {
+  answers: { resultIndex: number; questionId: string; answer: UnitAnswer }[];
+  unanswered: Unanswered[];
+  usage: { inputTokens: number; outputTokens: number; totalTokens: number };
+}
+
+function emptyUsage(): BatchOutcome["usage"] {
+  return { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+}
+
 async function evaluateBatch(
   state: { [key: string]: JsonValue },
   batch: PlannedQuestion[],
   evaluator: Pick<RangerEvaluator, "ask">,
-  results: Map<number, Map<string, UnitAnswer>>,
-  unanswered: Unanswered[],
   units: Unit[],
-  usage: { inputTokens: number; outputTokens: number; totalTokens: number },
-): Promise<void> {
+): Promise<BatchOutcome> {
   const payload: Questions = {};
   for (const item of batch) {
     payload[item.key] = questionPayload(item.unitIndex, item.question);
@@ -168,39 +175,50 @@ async function evaluateBatch(
     const message = error instanceof Error ? error.message : String(error);
     if (isTokenLimit(message) && batch.length > 1) {
       const middle = Math.floor(batch.length / 2);
-      await evaluateBatch(state, batch.slice(0, middle), evaluator, results, unanswered, units, usage);
-      await evaluateBatch(state, batch.slice(middle), evaluator, results, unanswered, units, usage);
-      return;
+      const first = await evaluateBatch(state, batch.slice(0, middle), evaluator, units);
+      const second = await evaluateBatch(state, batch.slice(middle), evaluator, units);
+      return {
+        answers: [...first.answers, ...second.answers],
+        unanswered: [...first.unanswered, ...second.unanswered],
+        usage: {
+          inputTokens: first.usage.inputTokens + second.usage.inputTokens,
+          outputTokens: first.usage.outputTokens + second.usage.outputTokens,
+          totalTokens: first.usage.totalTokens + second.usage.totalTokens,
+        },
+      };
     }
-    for (const item of batch) {
-      unanswered.push({
+    return {
+      answers: [],
+      unanswered: batch.map((item) => ({
         unitId: units[item.resultIndex]?.id ?? `unit_${item.resultIndex}`,
         questionId: item.questionId,
         message: message.replaceAll(/\s+/g, " ").trim().slice(0, 300),
-      });
-    }
-    return;
+      })),
+      usage: emptyUsage(),
+    };
   }
-  usage.inputTokens += result.usage.inputTokens;
-  usage.outputTokens += result.usage.outputTokens;
-  usage.totalTokens += result.usage.totalTokens;
+  const outcome: BatchOutcome = {
+    answers: [],
+    unanswered: [],
+    usage: {
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      totalTokens: result.usage.totalTokens,
+    },
+  };
   for (const item of batch) {
     const checked = checkAnswer(item.question, result.answers[item.key]);
     if (typeof checked === "string") {
-      unanswered.push({
+      outcome.unanswered.push({
         unitId: units[item.resultIndex]?.id ?? `unit_${item.resultIndex}`,
         questionId: item.questionId,
         message: checked,
       });
       continue;
     }
-    let byUnit = results.get(item.resultIndex);
-    if (!byUnit) {
-      byUnit = new Map();
-      results.set(item.resultIndex, byUnit);
-    }
-    byUnit.set(item.questionId, checked);
+    outcome.answers.push({ resultIndex: item.resultIndex, questionId: item.questionId, answer: checked });
   }
+  return outcome;
 }
 
 export function summarize(
@@ -351,7 +369,19 @@ export async function ask(input: AskInput): Promise<Report> {
       const batches = chunkItems(JSON.stringify(shardState).length, shard.items);
       for (const batch of batches) {
         questionsAsked += batch.length;
-        await evaluateBatch(shardState, batch, input.evaluator, results, unanswered, units, usage);
+        const outcome = await evaluateBatch(shardState, batch, input.evaluator, units);
+        usage.inputTokens += outcome.usage.inputTokens;
+        usage.outputTokens += outcome.usage.outputTokens;
+        usage.totalTokens += outcome.usage.totalTokens;
+        unanswered.push(...outcome.unanswered);
+        for (const { resultIndex, questionId, answer } of outcome.answers) {
+          let byUnit = results.get(resultIndex);
+          if (!byUnit) {
+            byUnit = new Map();
+            results.set(resultIndex, byUnit);
+          }
+          byUnit.set(questionId, answer);
+        }
         if (cacheDir !== undefined) {
           await Promise.all(
             batch.map(async (item) => {

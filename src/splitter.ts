@@ -70,36 +70,33 @@ function toPosix(cwd: string, absolute: string): string {
   return relative(cwd, absolute).split(sep).join("/");
 }
 
-async function walk(
-  absolute: string,
-  cwd: string,
-  extensions: Set<string>,
-  out: string[],
-): Promise<void> {
+async function walk(absolute: string, cwd: string, extensions: Set<string>): Promise<string[]> {
   // lstat: never follow symlinks (avoids cycles and dangling targets), and
   // skip entries that vanish mid-walk (sockets, lock files, removed files).
   let info;
   try {
     info = await lstat(absolute);
   } catch {
-    return;
+    return [];
   }
   if (info.isDirectory()) {
-    if (SKIPPED_DIRS.has(absolute.split(sep).pop() ?? "")) return;
+    if (SKIPPED_DIRS.has(absolute.split(sep).pop() ?? "")) return [];
     let entries: string[];
     try {
       entries = await readdir(absolute);
     } catch {
-      return;
+      return [];
     }
+    const out: string[] = [];
     for (const entry of entries) {
-      await walk(join(absolute, entry), cwd, extensions, out);
+      out.push(...(await walk(join(absolute, entry), cwd, extensions)));
     }
-    return;
+    return out;
   }
   if (info.isFile() && extensions.has(extname(absolute).toLowerCase())) {
-    out.push(toPosix(cwd, absolute));
+    return [toPosix(cwd, absolute)];
   }
+  return [];
 }
 
 export async function collectFiles(
@@ -120,8 +117,7 @@ export async function collectFiles(
     } catch {
       throw new Error(`no such file or directory: ${pattern}`);
     }
-    const bucket: string[] = [];
-    await walk(absolute, cwd, extensions, bucket);
+    const bucket: string[] = await walk(absolute, cwd, extensions);
     for (const path of bucket) found.add(path);
   }
   const sorted = [...found].sort();

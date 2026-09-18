@@ -38,6 +38,10 @@ rangerjev src/ --by file \
   --levels "read=opaque,effortful,clear,exemplary"
 ```
 
+Driving it from an agent? An agent skill ships in
+[`skills/rangerjev/SKILL.md`](skills/rangerjev/SKILL.md) — copy that
+folder into your agent's skills directory.
+
 ## Usage
 
 ```sh
@@ -180,10 +184,6 @@ with `--by file|function` and `--max-units`.
 `--escalate-below <p>` collects choice/score answers reported below confidence
 `p` into `escalations`, worst first. That list is your review queue. Boolean
 answers never escalate: Jev reports no confidence for yes/no judgments.
-
-## Roadmap
-
-- More `--by` splitters (e.g. call-tree over tests, dependency layers)
 
 ## Cache
 
