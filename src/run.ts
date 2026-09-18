@@ -78,25 +78,25 @@ function questionPayload(unitIndex: number, question: NamedQuestion): Question {
   return { ...question.question, instructions };
 }
 
-function chunkItems(baseSize: number, items: PlannedQuestion[]): PlannedQuestion[][] {
+function chunkItems(baseChars: number, items: PlannedQuestion[]): PlannedQuestion[][] {
   const batches: PlannedQuestion[][] = [];
   let current: PlannedQuestion[] = [];
-  let currentSize = baseSize;
+  let currentChars = baseChars;
   for (const item of items) {
-    const entrySize = JSON.stringify({
+    const entryChars = JSON.stringify({
       [item.key]: questionPayload(item.unitIndex, item.question),
     }).length;
     if (
       current.length > 0 &&
       (current.length + 1 > MAX_QUESTIONS_PER_REQUEST ||
-        currentSize + entrySize > REQUEST_BUDGET_CHARS)
+        currentChars + entryChars > REQUEST_BUDGET_CHARS)
     ) {
       batches.push(current);
       current = [];
-      currentSize = baseSize;
+      currentChars = baseChars;
     }
     current.push(item);
-    currentSize += entrySize;
+    currentChars += entryChars;
   }
   if (current.length > 0) batches.push(current);
   return batches;
@@ -108,8 +108,8 @@ function planBatches(
   context?: string,
 ): PlannedQuestion[][] {
   const state = stateFor(units, context);
-  const baseSize = JSON.stringify(state).length;
-  return chunkItems(baseSize, plannedQuestions(units, questions));
+  const baseChars = JSON.stringify(state).length;
+  return chunkItems(baseChars, plannedQuestions(units, questions));
 }
 
 function isTokenLimit(message: string): boolean {
@@ -307,19 +307,19 @@ function shardItems(
   }
   const shards: Shard[] = [];
   let current: Shard = { units: [], items: [] };
-  let currentSize = 0;
+  let currentChars = 0;
   const flush = (): void => {
     if (current.units.length > 0) shards.push(current);
     current = { units: [], items: [] };
-    currentSize = 0;
+    currentChars = 0;
   };
   units.forEach((unit, globalIndex) => {
     const items = byUnit.get(globalIndex);
     if (!items || items.length === 0) return;
-    if (current.units.length > 0 && currentSize + unit.source.length > budget) flush();
+    if (current.units.length > 0 && currentChars + unit.source.length > budget) flush();
     const localIndex = current.units.length;
     current.units.push(unit);
-    currentSize += unit.source.length;
+    currentChars += unit.source.length;
     for (const item of items) current.items.push({ ...item, unitIndex: localIndex });
   });
   flush();
