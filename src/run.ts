@@ -116,10 +116,18 @@ function isTokenLimit(message: string): boolean {
   return /max[_ -]?tokens|token limit|context length/i.test(message);
 }
 
+function finiteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function definedObject(value: unknown): value is Record<string, number> {
+  return value !== undefined && typeof value === "object";
+}
+
 function checkAnswer(question: NamedQuestion, answer: BatchAnswer | undefined): UnitAnswer | string {
   if (answer === undefined) return "evaluator omitted an answer";
   if (question.kind === "boolean") {
-    if (typeof answer.noul !== "number" || !Number.isFinite(answer.noul)) {
+    if (!finiteNumber(answer.noul)) {
       return `invalid noul answer (${String(answer.noul)})`;
     }
     const out: UnitAnswer = { type: "boolean", probability: answer.noul };
@@ -131,18 +139,18 @@ function checkAnswer(question: NamedQuestion, answer: BatchAnswer | undefined): 
       return `invalid choice answer (${String(answer.choice)})`;
     }
     const out: UnitAnswer = { type: "choice", choice: answer.choice };
-    if (answer.probabilities !== undefined && typeof answer.probabilities === "object") {
-      out.probabilities = answer.probabilities as Record<string, number>;
+    if (definedObject(answer.probabilities)) {
+      out.probabilities = answer.probabilities;
     }
     if (typeof answer.confidence === "number") out.confidence = answer.confidence;
     return out;
   }
-  if (typeof answer.score !== "number" || !Number.isFinite(answer.score)) {
+  if (!finiteNumber(answer.score)) {
     return `invalid score answer (${String(answer.score)})`;
   }
   const out: UnitAnswer = { type: "score", score: answer.score };
-  if (answer.probabilities !== undefined && typeof answer.probabilities === "object") {
-    out.probabilities = answer.probabilities as Record<string, number>;
+  if (definedObject(answer.probabilities)) {
+    out.probabilities = answer.probabilities;
   }
   if (typeof answer.confidence === "number") out.confidence = answer.confidence;
   return out;
