@@ -170,6 +170,9 @@ export async function collectFiles(
 
 const execFileAsync = promisify(execFile);
 
+/** Cap on git stderr quoted in failure messages: one line, not a dump. */
+const MAX_GIT_ERROR_CHARS = 200;
+
 const TEST_BASENAME = /(^|[._-])(test|spec)\.[^/]+$/;
 const TEST_DIR = /(^|\/)(__tests__|tests?)(\/|$)/;
 
@@ -212,7 +215,7 @@ export async function gitChangedPaths(cwd: string, base?: string): Promise<strin
       return stdout;
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      throw rangerError("RANGERJEV_GIT_FAILED", `git ${args[0]} failed: ${detail.replaceAll(/\s+/g, " ").trim().slice(0, 200)}`);
+      throw rangerError("RANGERJEV_GIT_FAILED", `git ${args[0]} failed: ${detail.replaceAll(/\s+/g, " ").trim().slice(0, MAX_GIT_ERROR_CHARS)}`);
     }
   };
   const toplevel = (await run(["rev-parse", "--show-toplevel"])).trim();
