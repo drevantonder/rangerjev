@@ -184,8 +184,8 @@ answers never escalate: Jev reports no confidence for yes/no judgments.
 
 ## Cache
 
-rangerjev caches answers by content under `$XDG_CACHE_HOME/rangerjev`
-(fallback `~/.cache/rangerjev`), keyed by model + unit source + question.
+rangerjev caches answers by content in the platform cache dir (`env-paths`;
+`$XDG_CACHE_HOME` respected on Linux), keyed by model + unit source + question.
 Repeat runs only spend credits on changed code. `--no-cache` opts out and
 `--cache-dir` overrides the location. The report's `cache` field shows hits
 and misses, and hit/miss counts also go to stderr.
